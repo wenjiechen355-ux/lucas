@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types'
 import {
@@ -13,6 +14,7 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
+  KeyRound,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Calendar, Eye, CheckSquare, ClipboardList, Database } from 'lucide-react'
@@ -123,6 +125,16 @@ export default function DashboardShell({
 
         {/* 底部 */}
         <div className="border-t border-gray-100 p-3 space-y-1">
+          <Link href="/dashboard/change-password"
+            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              pathname === '/dashboard/change-password'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <KeyRound className="w-5 h-5" />
+            更改密碼
+          </Link>
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"
