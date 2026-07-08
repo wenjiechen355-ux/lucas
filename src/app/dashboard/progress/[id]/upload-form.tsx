@@ -29,10 +29,10 @@ export default function UploadForm({ progressId, documentName, documentStatus }:
         body: formData,
       })
 
-      if (res.redirected) {
+      if (res.ok) {
         router.refresh()
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({ error: '上載失敗' }))
         setError(data.error || '上載失敗')
       }
     } catch (err) {

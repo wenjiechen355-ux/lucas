@@ -40,5 +40,5 @@ export async function POST(request: NextRequest) {
     .eq('id', progressId)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
-  return NextResponse.redirect(new URL(`/dashboard/progress/${progressId}`, request.url))
+  return NextResponse.json({ success: true, id: progressId })
 }
