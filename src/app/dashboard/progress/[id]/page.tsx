@@ -1,7 +1,8 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
-import { CheckCircle, XCircle, Clock, Upload, ArrowLeft, FileText, Download } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, Upload, ArrowLeft, FileText, Download, RefreshCw } from 'lucide-react'
 import UploadForm from './upload-form'
+import ReuploadForm from './reupload-form'
 import ApprovalForm from './approval-form'
 
 export default async function ProgressDetailPage({
@@ -118,12 +119,13 @@ export default async function ProgressDetailPage({
           </div>
         )}
 
-        {/* 上載證明（僅未完成/未提交審批時顯示） */}
-        {!isCompleted && !isApproved && isOwner && (
-          <UploadForm
+        {/* 上載/重新上載/更改已完成文件 */}
+        {isOwner && (
+          <ReuploadForm
             progressId={id}
             documentName={item.document_name}
             documentStatus={item.document_status}
+            itemStatus={item.status}
           />
         )}
 

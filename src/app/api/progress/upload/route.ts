@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
       document_name: file.name,
       document_status: 'pending',
       status: 'in_progress',
+      completed_date: null,
+      reviewer_comment: null,
     })
     .eq('id', progressId)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })

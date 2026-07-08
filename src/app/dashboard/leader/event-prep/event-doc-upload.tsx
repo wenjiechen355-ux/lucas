@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Upload, Download, Loader2, DollarSign, Camera, Edit3 } from 'lucide-react'
+import { Upload, Download, Loader2, DollarSign, Camera, Edit3, FileText } from 'lucide-react'
 
 interface Props {
   eventId: string
-  docType: 'finance' | 'photo' | 'minutes'
+  docType: 'finance' | 'photo' | 'minutes' | 'agenda'
   currentPath?: string | null
   currentName?: string | null
 }
@@ -16,6 +16,7 @@ const labels = {
   finance: { icon: DollarSign, label: '財務報告', accept: '.pdf,.doc,.docx,.xlsx,.xls,.jpg,.png' },
   photo: { icon: Camera, label: '活動相片', accept: '.jpg,.jpeg,.png,.gif,.zip,.pdf' },
   minutes: { icon: Edit3, label: '會議記錄', accept: '.pdf,.doc,.docx,.txt,.jpg,.png' },
+  agenda: { icon: FileText, label: '議程', accept: '.pdf,.doc,.docx,.txt,.jpg,.png' },
 }
 
 export default function EventDocUpload({ eventId, docType, currentPath, currentName }: Props) {

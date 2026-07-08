@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
   } else if (docType === 'minutes') {
     updateData.minutes_doc_path = filePath
     updateData.minutes_doc_name = file.name
+  } else if (docType === 'agenda') {
+    updateData.agenda_doc_path = filePath
+    updateData.agenda_doc_name = file.name
   } else {
     updateData.photo_doc_path = filePath
     updateData.photo_doc_name = file.name

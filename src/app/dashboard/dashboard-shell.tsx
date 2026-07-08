@@ -17,13 +17,14 @@ import {
   KeyRound,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Calendar, Eye, CheckSquare, ClipboardList, Database } from 'lucide-react'
+import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote } from 'lucide-react'
 
 const memberNavItems = [
   { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
   { label: '出席打卡', href: '/dashboard/attendance', icon: ClipboardCheck },
   { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
   { label: '我的文檔', href: '/dashboard/documents', icon: FileText },
+  { label: '活動投票', href: '/dashboard/event-polls', icon: Vote },
 ]
 
 const leaderNavItems = [
@@ -39,6 +40,7 @@ const viewAttendanceItem = { label: '出席情況', href: '/dashboard/leader/att
 const approvalItem = { label: '審批項目', href: '/dashboard/leader/approvals', icon: CheckSquare }
 const prepItem = { label: '活動籌備', href: '/dashboard/leader/event-prep', icon: ClipboardList }
 const archiveItem = { label: '資料庫', href: '/dashboard/leader/event-archive', icon: Database }
+const pollItem = { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote }
 
 export default function DashboardShell({
   profile,
@@ -55,7 +57,7 @@ export default function DashboardShell({
   const isLeader = profile.role === 'leader'
   const isExec = !!profile.position // 所有有職位嘅執委會成員
   const isChair = profile.position === '主席' || profile.position === '副主席'
-  const execItems = isExec ? [prepItem, archiveItem, createEventItem, viewAttendanceItem] : []
+  const execItems = isExec ? [prepItem, archiveItem, pollItem, createEventItem, viewAttendanceItem] : []
   const chairItems = isChair ? [approvalItem] : []
   const navItems = [...(isLeader ? leaderNavItems : memberNavItems), ...execItems, ...chairItems]
 

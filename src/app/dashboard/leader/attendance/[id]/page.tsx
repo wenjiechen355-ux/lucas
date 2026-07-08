@@ -1,8 +1,9 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { CheckCircle, XCircle, Users } from 'lucide-react'
+import { CheckCircle, XCircle, Users, FileText } from 'lucide-react'
 import DeleteEventForm from './delete-event-form'
 import LocationMap from '@/components/location-map'
+import AgendaUpload from './agenda-upload'
 
 export default async function EventAttendancePage({
   params,
@@ -70,6 +71,17 @@ export default async function EventAttendancePage({
           </div>
         )}
       </div>
+
+      {/* 議程上載 — 執委會開會 */}
+      {event.is_meeting && (
+        <div className="bg-purple-50 rounded-xl border border-purple-200 p-4 mb-6">
+          <AgendaUpload
+            eventId={eventId}
+            agendaPath={event.agenda_doc_path}
+            agendaName={event.agenda_doc_name}
+          />
+        </div>
+      )}
 
       {/* 出席统计 */}
       <div className="grid grid-cols-3 gap-4 mb-6">

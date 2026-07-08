@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -10,10 +10,19 @@ export default function LoginForm() {
   const [role, setRole] = useState<RoleSelection>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  // 載入已儲存嘅電郵同密碼
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('scout_saved_email')
+    const savedPw = localStorage.getItem('scout_saved_password')
+    if (savedEmail) { setEmail(savedEmail); setRememberMe(true) }
+    if (savedPw) setPassword(savedPw)
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -23,6 +32,16 @@ export default function LoginForm() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
+
+      // 儲存/清除記住我
+      if (rememberMe) {
+        localStorage.setItem('scout_saved_email', email)
+        localStorage.setItem('scout_saved_password', password)
+      } else {
+        localStorage.removeItem('scout_saved_email')
+        localStorage.removeItem('scout_saved_password')
+      }
+
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         window.location.href = '/dashboard'
@@ -132,17 +151,24 @@ export default function LoginForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">電郵</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+            <input type="email" name="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
               placeholder="your@email.com" required />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">密碼</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            <input type="password" name="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
               placeholder="••••••••" required minLength={6} />
           </div>
+
+          {/* 記住我 */}
+          <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
+            <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
+            記住我 <span className="text-gray-400">（下次自動填寫電郵）</span>
+          </label>
 
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 

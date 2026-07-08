@@ -29,6 +29,8 @@ interface EventData {
   finance_doc_name?: string
   photo_doc_path?: string
   photo_doc_name?: string
+  agenda_doc_path?: string
+  agenda_doc_name?: string
 }
 
 interface PrepItem {
@@ -312,6 +314,21 @@ export default function EventPrepPage() {
                   </div>
                 </div>
               </div>
+
+              {/* 議程 — 執委會開會（所有執委會成員可見） */}
+              {event.is_meeting && (
+                <div className="px-5 py-3 bg-purple-50/30 border-b border-gray-100 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-purple-600" /> 議程
+                  </span>
+                  <EventDocUpload
+                    eventId={event.id}
+                    docType="agenda"
+                    currentPath={event.agenda_doc_path}
+                    currentName={event.agenda_doc_name}
+                  />
+                </div>
+              )}
 
               {/* 計劃書 */}
               <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
