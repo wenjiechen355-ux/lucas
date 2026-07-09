@@ -21,14 +21,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '參數不完整' }, { status: 400 })
   }
 
-  // Upload file to storage
-  const filePath = `progress/${user.id}/${progressId}_${Date.now()}_${file.name}`
+  // Upload file to storage with ASCII-safe path
+  const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'bin'
+  const safeFileName = `${progressId}_${Date.now()}.${ext}`
+  const filePath = `progress/${user.id}/${safeFileName}`
   const { error: uploadError } = await supabase.storage
     .from('documents')
     .upload(filePath, file)
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 })
 
-  // Update progress item
+  // Update progress item (keep original name for display)
   const { error: updateError } = await supabase
     .from('progress_items')
     .update({

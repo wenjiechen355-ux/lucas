@@ -154,8 +154,10 @@ export async function uploadDocument(formData: FormData) {
 
   if (!file || !title) throw new Error('请填写文档标题并选择文件')
 
-  // 上传到 Supabase Storage
-  const filePath = `${user.id}/${Date.now()}_${file.name}`
+  // 上传到 Supabase Storage with ASCII-safe path
+  const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'bin'
+  const safeFileName = `${Date.now()}.${ext}`
+  const filePath = `${user.id}/${safeFileName}`
   const { error: uploadError } = await supabase.storage
     .from('documents')
     .upload(filePath, file)

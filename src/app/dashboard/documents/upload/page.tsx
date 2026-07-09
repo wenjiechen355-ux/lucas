@@ -29,14 +29,16 @@ export default function UploadDocumentPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('未登入')
 
-      // 上传到 Storage
-      const filePath = `${user.id}/${Date.now()}_${file.name}`
+      // 上传到 Storage with ASCII-safe path
+      const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'bin'
+      const safeFileName = `${Date.now()}.${ext}`
+      const filePath = `${user.id}/${safeFileName}`
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(filePath, file)
       if (uploadError) throw uploadError
 
-      // 创建记录
+      // 创建记录 (keep original name for display)
       const { error: dbError } = await supabase.from('documents').insert({
         member_id: user.id,
         title,

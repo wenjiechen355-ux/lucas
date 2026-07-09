@@ -28,14 +28,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '參數不完整' }, { status: 400 })
   }
 
-  // Upload to storage
-  const filePath = `plans/${eventId}/${Date.now()}_${file.name}`
+  // Upload to storage with ASCII-safe path
+  const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'bin'
+  const safeFileName = `${Date.now()}.${ext}`
+  const filePath = `plans/${eventId}/${safeFileName}`
   const { error: uploadError } = await supabase.storage
     .from('documents')
     .upload(filePath, file)
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 })
 
-  // Update event record
+  // Update event record (keep original name for display)
   const { error: updateError } = await supabase
     .from('events')
     .update({ plan_doc_path: filePath, plan_doc_name: file.name })

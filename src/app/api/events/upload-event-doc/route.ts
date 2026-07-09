@@ -29,7 +29,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '參數不完整' }, { status: 400 })
   }
 
-  const filePath = `events/${eventId}/${docType}/${Date.now()}_${file.name}`
+  // Sanitize filename to ASCII-safe to avoid Supabase storage "Invalid key" errors with non-ASCII chars
+  const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'bin'
+  const safeFileName = `${Date.now()}.${ext}`
+  const filePath = `events/${eventId}/${docType}/${safeFileName}`
   const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file)
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 })
 
