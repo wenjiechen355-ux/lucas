@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createNotification } from '@/lib/notifications'
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
@@ -54,6 +55,19 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Send notification to the member
+  const { data: doc } = await supabase
+    .from('documents').select('member_id, title').eq('id', docId).single()
+  if (doc) {
+    await createNotification({
+      user_id: doc.member_id,
+      type: 'approval_document',
+      title: status === 'approved' ? `文檔「${doc.title}」已獲審批` : `文檔「${doc.title}」已被退回`,
+      message: comment || (status === 'approved' ? '你的文檔已通過審批' : '請查看評語'),
+      link: '/dashboard/documents',
+    })
   }
 
   return NextResponse.redirect(new URL('/dashboard/leader/documents', request.url))

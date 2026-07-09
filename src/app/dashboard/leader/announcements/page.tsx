@@ -47,6 +47,12 @@ export default function AnnouncementsPage() {
       await supabase.from('announcements').update({ title: formTitle, content: formContent, is_pinned: formPinned, updated_at: new Date().toISOString() }).eq('id', editId)
     } else {
       await supabase.from('announcements').insert({ title: formTitle, content: formContent, is_pinned: formPinned, created_by: profile?.id })
+      // Notify all users
+      fetch('/api/announcements/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: formTitle, message: formContent.slice(0, 200) }),
+      }).catch(() => {})
     }
     resetForm(); setShowCreate(false); loadData(); setSaving(false)
   }

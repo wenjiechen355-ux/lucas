@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { User, Mail, Phone, MapPin, Shield, Save, RefreshCw, Check, Hash, Home, AlertTriangle } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Shield, Save, RefreshCw, Check, Hash, Home, AlertTriangle, Cake } from 'lucide-react'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [homeAddress, setHomeAddress] = useState('')
   const [emergencyContact, setEmergencyContact] = useState('')
   const [emergencyPhone, setEmergencyPhone] = useState('')
+  const [birthday, setBirthday] = useState('')
 
   useEffect(() => { loadProfile() }, [])
 
@@ -38,6 +39,7 @@ export default function ProfilePage() {
       setHomeAddress(data.home_address || '')
       setEmergencyContact(data.emergency_contact || '')
       setEmergencyPhone(data.emergency_phone || '')
+      setBirthday(data.birthday || '')
     }
     setLoading(false)
   }
@@ -55,6 +57,7 @@ export default function ProfilePage() {
       home_address: homeAddress,
       emergency_contact: emergencyContact,
       emergency_phone: emergencyPhone,
+      birthday: birthday || null,
     }).eq('id', profile.id)
 
     setSaving(false)
@@ -62,7 +65,7 @@ export default function ProfilePage() {
       alert('儲存失敗：' + error.message)
     } else {
       setSaved(true)
-      setProfile({ ...profile, full_name: fullName, phone, scout_unit: scoutUnit, scout_number: scoutNumber, home_address: homeAddress, emergency_contact: emergencyContact, emergency_phone: emergencyPhone })
+      setProfile({ ...profile, full_name: fullName, phone, scout_unit: scoutUnit, scout_number: scoutNumber, home_address: homeAddress, emergency_contact: emergencyContact, emergency_phone: emergencyPhone, birthday })
       setTimeout(() => setSaved(false), 3000)
     }
   }
@@ -151,6 +154,16 @@ export default function ProfilePage() {
             <input type="text" value={scoutUnit} onChange={e => setScoutUnit(e.target.value)}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
               placeholder="所屬旅團（可選）" />
+          </div>
+        </div>
+
+        {/* Birthday */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">生日</label>
+          <div className="flex items-center gap-2">
+            <Cake className="w-4 h-4 text-gray-400" />
+            <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" />
           </div>
         </div>
 

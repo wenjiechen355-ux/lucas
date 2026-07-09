@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { notifyAll } from '@/lib/notifications'
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
@@ -68,6 +69,14 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Notify all users about the new activity
+  await notifyAll({
+    type: 'activity',
+    title: `新活動：${title}`,
+    message: description || `日期：${eventDate ? new Date(eventDate).toLocaleDateString('zh-HK') : '待定'}，地點：${location || '未指定'}`,
+    link: '/dashboard/attendance',
+  })
 
   return NextResponse.redirect(new URL('/dashboard/leader/attendance', request.url))
 }

@@ -9,8 +9,25 @@ export interface Profile {
   position?: string        // 職位（主席、副主席等）
   phone?: string
   scout_unit?: string      // 旅團
+  birthday?: string        // 生日 (DATE)
+  scout_number?: string    // 童軍編號
+  home_address?: string    // 家庭地址
+  emergency_contact?: string // 緊急聯絡人
+  emergency_phone?: string   // 緊急聯絡電話
   created_at: string
   updated_at: string
+}
+
+// ===== 通知 =====
+export interface Notification {
+  id: string
+  user_id: string
+  type: string
+  title: string
+  message: string
+  link: string
+  is_read: boolean
+  created_at: string
 }
 
 // ===== 活动 =====

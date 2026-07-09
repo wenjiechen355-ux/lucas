@@ -1,5 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { LayoutDashboard, ClipboardCheck, TrendingUp, FileText, Users, Calendar, Eye, Megaphone, Pin } from 'lucide-react'
+import { LayoutDashboard, ClipboardCheck, TrendingUp, FileText, Users, Calendar, Eye, Megaphone, Pin, Cake } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -62,6 +62,15 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
     .limit(5)
 
+  // 本月生日
+  const now = new Date()
+  const currentMonth = now.getMonth() + 1
+  const { data: birthdays } = await supabase
+    .from('profiles')
+    .select('id, full_name, birthday')
+    .not('birthday', 'is', null)
+    .order('birthday')
+
   return (
     <div>
       <div className="mb-8">
@@ -103,6 +112,41 @@ export default async function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* 本月生日 */}
+      {(() => {
+        const thisMonth = birthdays?.filter(b => {
+          if (!b.birthday) return false
+          const d = new Date(b.birthday)
+          return d.getMonth() + 1 === currentMonth
+        })
+        if (!thisMonth || thisMonth.length === 0) return null
+        return (
+          <div className="mb-8">
+            <h2 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
+              <Cake className="w-4 h-4 text-pink-500" /> 本月生日 ({thisMonth.length})
+            </h2>
+            <div className="bg-white rounded-xl border border-pink-100 p-4">
+              <div className="flex flex-wrap gap-3">
+                {thisMonth.map(m => {
+                  const d = m.birthday ? new Date(m.birthday) : null
+                  return (
+                    <div key={m.id} className="flex items-center gap-2 px-3 py-2 bg-pink-50 rounded-lg">
+                      <div className="w-8 h-8 rounded-full bg-pink-200 flex items-center justify-center text-pink-700 text-xs font-bold">
+                        {m.full_name?.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{m.full_name}</p>
+                        <p className="text-xs text-pink-500">{d ? `${d.getMonth() + 1}/${d.getDate()}` : ''}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 快速入口 */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">

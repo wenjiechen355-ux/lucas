@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays } from 'lucide-react'
+import NotifBell from '@/components/notif-bell'
 
 const memberNavItems = [
   { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
@@ -131,6 +132,7 @@ export default function DashboardShell({
 
         {/* 底部 */}
         <div className="border-t border-gray-100 p-3 space-y-1">
+          <NotifBell />
           <Link href="/dashboard/profile"
             className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
               pathname === '/dashboard/profile'

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createNotification } from '@/lib/notifications'
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
@@ -45,6 +46,19 @@ export async function POST(request: NextRequest) {
     .eq('id', progressId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Send notification to the member
+  const { data: progressItem } = await supabase
+    .from('progress_items').select('member_id, title').eq('id', progressId).single()
+  if (progressItem) {
+    await createNotification({
+      user_id: progressItem.member_id,
+      type: 'approval_progress',
+      title: action === 'approve' ? `進度「${progressItem.title}」已通過審批` : `進度「${progressItem.title}」已被退回`,
+      message: comment || (action === 'approve' ? '你的進度項目已獲審批通過' : '請查看評語並重新上傳'),
+      link: `/dashboard/progress/${progressId}`,
+    })
+  }
 
   return NextResponse.redirect(new URL('/dashboard/progress', request.url))
 }
