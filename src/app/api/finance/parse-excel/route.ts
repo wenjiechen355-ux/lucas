@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
     return -1
   }
 
-  const typeCol = findCol(['类型', '類別', 'type', '收支'])
-  const catCol = findCol(['项目', '項目', '类别', '類別', 'category', '分類'])
-  const amountCol = findCol(['金额', '金額', 'amount', '費用', '总额'])
-  const descCol = findCol(['备注', '備註', '说明', '說明', 'description', '摘要', '详情'])
+  const typeCol = findCol(['類型', '类型', '收支', '類別', 'type', '收入/支出'])
+  const catCol = findCol(['項目', '项目', '类别', '類別', 'category', '分類', '分类'])
+  const amountCol = findCol(['金額', '金额', 'amount', '費用', '费用', '总额', '總額'])
+  const descCol = findCol(['備註', '备注', '说明', '說明', 'description', '摘要', '详情', '詳情'])
 
   // If no header match, try position-based
   const transactions: any[] = []
@@ -66,9 +66,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine type
-    let finalType = 'expense'
-    if (type === '收入' || type === 'income' || type === '收') finalType = 'income'
-    else if (category.includes('收入') || category.includes('赞助') || category.includes('團費')) finalType = 'income'
+    let finalType: 'income' | 'expense' = 'expense'
+    const typeLower = type.toLowerCase()
+    if (typeLower.includes('收') || typeLower === 'income' || typeLower.includes('入')) finalType = 'income'
+    else if (category.includes('收入') || category.includes('收') || category.includes('團費') || category.includes('赞助') || category.includes('贊助')) finalType = 'income'
+    else if (typeLower.includes('支') || typeLower === 'expense' || typeLower.includes('出')) finalType = 'expense'
 
     if (!amount || isNaN(amount)) continue
 
