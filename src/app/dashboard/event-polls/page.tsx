@@ -22,7 +22,10 @@ export default function MemberEventPollsPage() {
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
     const { data } = await supabase.from('event_polls').select('*, event_poll_votes(*)').order('created_at', { ascending: false })
-    setPolls(data || [])
+    // Filter: regular members cannot see exec-only polls
+    const isMemberExec = !!prof?.position
+    const filtered = isMemberExec ? (data || []) : (data || []).filter(p => !p.is_exec_meeting)
+    setPolls(filtered)
     setLoading(false)
   }
 

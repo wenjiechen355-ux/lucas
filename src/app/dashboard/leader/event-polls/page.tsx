@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange } from 'lucide-react'
+import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange, Mail } from 'lucide-react'
 import MonthCalendar from '@/components/month-calendar'
 
 interface Field {
@@ -118,6 +118,18 @@ export default function EventPollsPage() {
     if (!confirm('確定刪除此投票？')) return
     await supabase.from('event_polls').delete().eq('id', pollId)
     loadData()
+  }
+
+  async function handleNotifyExec(poll: any) {
+    if (!confirm(`發送郵件通知所有執委會成員？`)) return
+    const res = await fetch('/api/send-poll-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pollTitle: poll.title, pollId: poll.id, pollDesc: poll.description }),
+    })
+    const data = await res.json()
+    if (data.success) { alert(`已發送通知俾 ${data.count} 位執委會成員 ✅`) }
+    else { alert(data.error || '發送失敗') }
   }
 
   if (loading) return <div className="flex items-center justify-center py-20"><RefreshCw className="w-6 h-6 animate-spin text-gray-400" /></div>
@@ -273,7 +285,8 @@ export default function EventPollsPage() {
               <PollCardV2 key={poll.id} poll={poll} profile={profile} isExec={isExec}
                 onVote={(sels: any) => handleVote(poll.id, sels)}
                 onClose={() => handleClosePoll(poll.id)}
-                onDelete={() => handleDeletePoll(poll.id)} />
+                onDelete={() => handleDeletePoll(poll.id)}
+                onNotify={() => handleNotifyExec(poll)} />
             ))}
           </div>
         </div>
@@ -288,7 +301,8 @@ export default function EventPollsPage() {
           <div className="space-y-4">
             {closedPolls.map(poll => (
               <PollCardV2 key={poll.id} poll={poll} profile={profile} isExec={isExec}
-                onVote={() => {}} onClose={() => {}} onDelete={() => handleDeletePoll(poll.id)} />
+                onVote={() => {}} onClose={() => {}} onDelete={() => handleDeletePoll(poll.id)}
+                onNotify={() => handleNotifyExec(poll)} />
             ))}
           </div>
         ) : (
@@ -302,7 +316,7 @@ export default function EventPollsPage() {
   )
 }
 
-function PollCardV2({ poll, profile, isExec, onVote, onClose, onDelete }: any) {
+function PollCardV2({ poll, profile, isExec, onVote, onClose, onDelete, onNotify }: any) {
   const fields: any[] = poll.fields || []
   const votes: any[] = poll.event_poll_votes || []
   const totalVoters = votes.length
@@ -373,6 +387,12 @@ function PollCardV2({ poll, profile, isExec, onVote, onClose, onDelete }: any) {
         </div>
         {isExec && isOpen && (
           <div className="flex items-center gap-1">
+            {poll.is_exec_meeting && onNotify && (
+              <button onClick={onNotify}
+                className="px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 flex items-center gap-1">
+                <Mail className="w-3 h-3" />通知執委會
+              </button>
+            )}
             <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">結束投票</button>
             <button onClick={onDelete} className="p-1.5 text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
           </div>
