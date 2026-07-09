@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Plus, ClipboardList, User, Calendar, MapPin, MoreHorizontal, CheckCircle, XCircle, Clock, RefreshCw, Trash2, FileText, Play, Flag, DollarSign, Camera, Edit3 } from 'lucide-react'
 import PlanUploadForm from './plan-upload-form'
 import EventDocUpload from './event-doc-upload'
+import EventTransactions from '@/components/event-transactions'
 import ReviewerSelector from '@/components/reviewer-selector'
 
 interface Profile {
@@ -483,6 +484,11 @@ export default function EventPrepPage() {
                   })}
                 </div>
               )}
+
+              {/* 活动收支 */}
+              <div className="p-5 border-t border-gray-100">
+                <EventTransactions eventId={event.id} isExec={isExec} />
+              </div>
             </div>
           ))}
         </div>

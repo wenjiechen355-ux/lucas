@@ -39,6 +39,10 @@ export default function EventDocUpload({ eventId, docType, currentPath, currentN
     try {
       const res = await fetch('/api/events/upload-event-doc', { method: 'POST', body: formData })
       if (res.ok) {
+        const data = await res.json()
+        if (data.parsedCount > 0) {
+          alert(`✅ 財務報告已上載，自動匯入 ${data.parsedCount} 筆收支記錄！`)
+        }
         router.refresh()
       } else {
         const data = await res.json()
