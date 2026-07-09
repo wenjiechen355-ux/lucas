@@ -7,6 +7,7 @@ import AgendaUpload from './agenda-upload'
 import SetDateForm from './set-date-form'
 import GoogleCalendarBtn from '@/components/google-calendar-btn'
 import EventPhotos from '@/components/event-photos'
+import EventTransactions from '@/components/event-transactions'
 
 export default async function EventAttendancePage({
   params,
@@ -20,6 +21,7 @@ export default async function EventAttendancePage({
   const { data: profile } = await supabase
     .from('profiles').select('role,position').eq('id', user?.id).single()
   const canDelete = profile?.role === 'leader' || ['主席','副主席'].includes(profile?.position || '')
+  const isExec = profile?.role === 'leader' || !!profile?.position
 
   // 获取活动
   const { data: event } = await supabase
@@ -206,6 +208,11 @@ export default async function EventAttendancePage({
       {/* Photos */}
       <div className="mt-8">
         <EventPhotos eventId={eventId} />
+      </div>
+
+      {/* Finance */}
+      <div className="mt-8">
+        <EventTransactions eventId={eventId} isExec={isExec} />
       </div>
     </div>
   )
