@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   Menu,
   KeyRound,
+  User,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays } from 'lucide-react'
@@ -130,6 +131,16 @@ export default function DashboardShell({
 
         {/* 底部 */}
         <div className="border-t border-gray-100 p-3 space-y-1">
+          <Link href="/dashboard/profile"
+            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              pathname === '/dashboard/profile'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <User className="w-5 h-5" />
+            個人檔案
+          </Link>
           <Link href="/dashboard/change-password"
             className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
               pathname === '/dashboard/change-password'
