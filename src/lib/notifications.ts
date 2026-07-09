@@ -1,10 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-)
+function getClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+}
 
 export async function createNotification(params: {
   user_id: string
@@ -14,7 +16,7 @@ export async function createNotification(params: {
   link?: string
 }) {
   try {
-    await supabase.from('notifications').insert({
+    await getClient().from('notifications').insert({
       user_id: params.user_id,
       type: params.type,
       title: params.title,
@@ -33,6 +35,7 @@ export async function notifyAdmins(params: {
   link?: string
 }) {
   try {
+    const supabase = getClient()
     const { data: admins } = await supabase
       .from('profiles')
       .select('id')
@@ -58,6 +61,7 @@ export async function notifyAll(params: {
   exclude_user_id?: string
 }) {
   try {
+    const supabase = getClient()
     let query = supabase.from('profiles').select('id')
     if (params.exclude_user_id) {
       query = query.neq('id', params.exclude_user_id)
