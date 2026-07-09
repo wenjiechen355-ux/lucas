@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Wallet, Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react'
+import { Wallet, Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, FileSpreadsheet, Check } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -22,6 +22,11 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<{ type: 'income' | 'expense'; category: string; amount: string; description: string }>({ type: 'expense', category: '其他', amount: '', description: '' })
+
+  // Excel upload state
+  const [showExcelUpload, setShowExcelUpload] = useState(false)
+  const [excelPreview, setExcelPreview] = useState<any[] | null>(null)
+  const [parsing, setParsing] = useState(false)
 
   useEffect(() => { loadTxns() }, [])
 
@@ -57,6 +62,44 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
     setSaving(false)
   }
 
+  async function handleExcelUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setParsing(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/finance/parse-excel', { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.transactions?.length) {
+      setExcelPreview(data.transactions)
+    } else {
+      alert(data.error || '無法解析 Excel 檔案，請確認格式')
+    }
+    setParsing(false)
+    e.target.value = ''
+  }
+
+  async function batchSave() {
+    if (!excelPreview || excelPreview.length === 0) return
+    setSaving(true)
+    const inserts = excelPreview.map(t => ({
+      event_id: eventId,
+      type: t.type,
+      category: t.category,
+      amount: t.amount,
+      description: t.description || '',
+    }))
+    const { error } = await supabase.from('event_transactions').insert(inserts)
+    if (!error) {
+      setExcelPreview(null)
+      setShowExcelUpload(false)
+      loadTxns()
+    } else {
+      alert('批次儲存失敗：' + error.message)
+    }
+    setSaving(false)
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('確定刪除此記錄？')) return
     await supabase.from('event_transactions').delete().eq('id', id)
@@ -75,12 +118,61 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
           <span className="text-xs text-gray-400 font-normal">({txns.length})</span>
         </h3>
         {isExec && (
-          <button onClick={() => setShowAdd(!showAdd)}
+          <button onClick={() => { setShowAdd(!showAdd); setShowExcelUpload(false) }}
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400">
             {showAdd ? '取消' : <><Plus className="w-3.5 h-3.5" /> 新增記錄</>}
           </button>
         )}
       </div>
+
+      {/* Excel upload for exec */}
+      {isExec && !showAdd && (
+        <div className="mb-3">
+          {!showExcelUpload ? (
+            <button onClick={() => setShowExcelUpload(true)}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 transition-colors">
+              <FileSpreadsheet className="w-3.5 h-3.5" /> 上載 Excel 財務報告自動匯入
+            </button>
+          ) : (
+            <div className="p-3 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg border border-emerald-200 dark:border-emerald-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> 匯入 Excel 財務報告
+                </span>
+                <button onClick={() => { setShowExcelUpload(false); setExcelPreview(null) }}
+                  className="text-xs text-gray-400 hover:text-gray-600">取消</button>
+              </div>
+              <p className="text-xs text-gray-500">支援 .xlsx 格式，欄位：類型/項目/金額/備註</p>
+              <input type="file" accept=".xlsx,.xls" onChange={handleExcelUpload}
+                className="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-emerald-50 file:text-emerald-600 hover:file:bg-emerald-100" />
+
+              {parsing && <p className="text-xs text-gray-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> 解析中...</p>}
+
+              {excelPreview && excelPreview.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">已識別 {excelPreview.length} 筆記錄：</p>
+                  <div className="max-h-40 overflow-y-auto space-y-1 mb-2">
+                    {excelPreview.map((t, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs bg-white dark:bg-slate-800 rounded px-2 py-1">
+                        <span className={t.type === 'income' ? 'text-green-600' : 'text-red-600'}>
+                          {t.type === 'income' ? '+' : '-'}MOP {Number(t.amount).toFixed(2)}
+                        </span>
+                        <span className="text-gray-500">{t.category}</span>
+                        {t.description && <span className="text-gray-400 truncate">{t.description}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={batchSave} disabled={saving}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-emerald-500 text-white rounded text-xs font-medium hover:bg-emerald-600 disabled:opacity-50">
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    {saving ? '儲存中...' : `確認匯入 ${excelPreview.length} 筆`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3 mb-3">
