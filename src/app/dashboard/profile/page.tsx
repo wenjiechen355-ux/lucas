@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { User, Mail, Phone, MapPin, Shield, Save, RefreshCw, Check } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Shield, Save, RefreshCw, Check, Hash, Home, AlertTriangle } from 'lucide-react'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -17,6 +17,10 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [scoutUnit, setScoutUnit] = useState('')
+  const [scoutNumber, setScoutNumber] = useState('')
+  const [homeAddress, setHomeAddress] = useState('')
+  const [emergencyContact, setEmergencyContact] = useState('')
+  const [emergencyPhone, setEmergencyPhone] = useState('')
 
   useEffect(() => { loadProfile() }, [])
 
@@ -30,6 +34,10 @@ export default function ProfilePage() {
       setFullName(data.full_name || '')
       setPhone(data.phone || '')
       setScoutUnit(data.scout_unit || '')
+      setScoutNumber(data.scout_number || '')
+      setHomeAddress(data.home_address || '')
+      setEmergencyContact(data.emergency_contact || '')
+      setEmergencyPhone(data.emergency_phone || '')
     }
     setLoading(false)
   }
@@ -43,6 +51,10 @@ export default function ProfilePage() {
       full_name: fullName,
       phone,
       scout_unit: scoutUnit,
+      scout_number: scoutNumber,
+      home_address: homeAddress,
+      emergency_contact: emergencyContact,
+      emergency_phone: emergencyPhone,
     }).eq('id', profile.id)
 
     setSaving(false)
@@ -50,7 +62,7 @@ export default function ProfilePage() {
       alert('儲存失敗：' + error.message)
     } else {
       setSaved(true)
-      setProfile({ ...profile, full_name: fullName, phone, scout_unit: scoutUnit })
+      setProfile({ ...profile, full_name: fullName, phone, scout_unit: scoutUnit, scout_number: scoutNumber, home_address: homeAddress, emergency_contact: emergencyContact, emergency_phone: emergencyPhone })
       setTimeout(() => setSaved(false), 3000)
     }
   }
@@ -139,6 +151,54 @@ export default function ProfilePage() {
             <input type="text" value={scoutUnit} onChange={e => setScoutUnit(e.target.value)}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
               placeholder="所屬旅團（可選）" />
+          </div>
+        </div>
+
+        {/* Scout Number */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">童軍編號</label>
+          <div className="flex items-center gap-2">
+            <Hash className="w-4 h-4 text-gray-400" />
+            <input type="text" value={scoutNumber} onChange={e => setScoutNumber(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+              placeholder="童軍編號（可選）" />
+          </div>
+        </div>
+
+        {/* Home Address */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">家庭地址</label>
+          <div className="flex items-center gap-2">
+            <Home className="w-4 h-4 text-gray-400" />
+            <input type="text" value={homeAddress} onChange={e => setHomeAddress(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+              placeholder="家庭地址（可選）" />
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-gray-100 pt-4">
+          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" /> 緊急聯絡資料
+          </p>
+
+          {/* Emergency Contact */}
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">緊急聯絡人姓名</label>
+            <input type="text" value={emergencyContact} onChange={e => setEmergencyContact(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+              placeholder="緊急聯絡人（可選）" />
+          </div>
+
+          {/* Emergency Phone */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">緊急聯絡人電話</label>
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-gray-400" />
+              <input type="text" value={emergencyPhone} onChange={e => setEmergencyPhone(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                placeholder="緊急聯絡人電話（可選）" />
+            </div>
           </div>
         </div>
 
