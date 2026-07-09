@@ -21,7 +21,7 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ type: 'expense' as const, category: '其他', amount: '', description: '' })
+  const [form, setForm] = useState<{ type: 'income' | 'expense'; category: string; amount: string; description: string }>({ type: 'expense', category: '其他', amount: '', description: '' })
 
   useEffect(() => { loadTxns() }, [])
 
