@@ -29,28 +29,38 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = await request.formData()
+  const eventType = (formData.get('event_type') as string) || 'unit'
   const title = formData.get('title') as string
   const description = formData.get('description') as string
   const eventDate = formData.get('event_date') as string
   const location = formData.get('location') as string
   const isExecOnly = formData.get('is_exec_only') === 'true'
-  const isMeeting = formData.get('is_meeting') === 'true'
+  const isExecMeeting = formData.get('is_exec_meeting') === 'true'
+  const requiresMinutes = formData.get('requires_minutes') === 'true'
   const latitude = formData.get('latitude') ? parseFloat(formData.get('latitude') as string) : null
   const longitude = formData.get('longitude') ? parseFloat(formData.get('longitude') as string) : null
 
-  if (!title || !eventDate) {
-    return NextResponse.json({ error: '请填写活动标题和日期' }, { status: 400 })
+  if (!title) {
+    return NextResponse.json({ error: '请填写活动标题' }, { status: 400 })
   }
+
+  // 验证：仅 unit 类型才能设例会/会议记录
+  const finalIsExecMeeting = eventType === 'unit' ? isExecMeeting : false
+  const finalRequiresMinutes = eventType === 'unit' ? requiresMinutes : false
+  const finalIsExecOnly = eventType === 'unit' ? isExecMeeting : false
 
   const { error } = await supabase.from('events').insert({
     title,
     description: description || '',
-    event_date: eventDate,
+    event_date: eventDate || null,
     location: location || '',
     created_by: user.id,
     attendance_open: false, // 預設唔開放出席
-    is_exec_only: isExecOnly,
-    is_meeting: isMeeting,
+    event_type: eventType,
+    is_exec_only: finalIsExecOnly,
+    is_exec_meeting: finalIsExecMeeting,
+    requires_minutes: finalRequiresMinutes,
+    is_meeting: finalRequiresMinutes, // 保留兼容旧 UI
     latitude: latitude,
     longitude: longitude,
   })

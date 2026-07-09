@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { Upload, FileText, CheckCircle, XCircle, Clock, Download } from 'lucide-react'
+import DocumentReviewerCell from '@/components/document-reviewer-cell'
 
 export default async function DocumentsPage() {
   const supabase = await createServerSupabaseClient()
@@ -84,6 +85,7 @@ export default async function DocumentsPage() {
                     </span>
                   </div>
                 </div>
+                <DocumentReviewerCell docId={doc.id} title={doc.title} status={doc.status} />
               </div>
             )
           })}

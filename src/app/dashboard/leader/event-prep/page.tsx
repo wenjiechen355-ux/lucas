@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, ClipboardList, User, Calendar, MapPin, MoreHorizontal, CheckCircle, Clock, RefreshCw, Trash2, FileText, Play, Flag, DollarSign, Camera, Edit3 } from 'lucide-react'
+import { Plus, ClipboardList, User, Calendar, MapPin, MoreHorizontal, CheckCircle, XCircle, Clock, RefreshCw, Trash2, FileText, Play, Flag, DollarSign, Camera, Edit3 } from 'lucide-react'
 import PlanUploadForm from './plan-upload-form'
 import EventDocUpload from './event-doc-upload'
+import ReviewerSelector from '@/components/reviewer-selector'
 
 interface Profile {
   id: string
@@ -31,6 +32,9 @@ interface EventData {
   photo_doc_name?: string
   agenda_doc_path?: string
   agenda_doc_name?: string
+  start_approved?: boolean
+  start_approval_status?: string
+  start_approval_comment?: string
 }
 
 interface PrepItem {
@@ -51,6 +55,7 @@ export default function EventPrepPage() {
   const [execMembers, setExecMembers] = useState<Profile[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [eventReviewers, setEventReviewers] = useState<Record<string, string>>({})
 
   // Modal state
   const [showModal, setShowModal] = useState(false)
@@ -157,11 +162,25 @@ export default function EventPrepPage() {
   )
 
   const isChair = profile?.position === '主席' || profile?.position === '副主席'
+  const isExec = !!profile?.position
   const isSecretary = profile?.position === '文書'
 
   async function handleStartEvent(eventId: string) {
     if (!confirm('確定開始此活動？活動開始後會開放出席俾成員簽到。')) return
-    await supabase.from('events').update({ status: 'active', attendance_open: true }).eq('id', eventId)
+    await supabase.from('events').update({ status: 'active', attendance_open: true, start_approval_status: 'approved' }).eq('id', eventId)
+    loadData()
+  }
+
+  async function handleRequestStart(eventId: string) {
+    if (!confirm('提交開始活動申請？主席/副主席審批後即可開始。')) return
+    await supabase.from('events').update({ start_approval_status: 'pending' }).eq('id', eventId)
+    loadData()
+  }
+
+  async function handleRejectStart(eventId: string) {
+    const comment = prompt('請輸入退回原因（可選）：')
+    if (comment === null) return // cancelled
+    await supabase.from('events').update({ start_approval_status: 'rejected', start_approval_comment: comment || null }).eq('id', eventId)
     loadData()
   }
 
@@ -276,13 +295,44 @@ export default function EventPrepPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    {isChair && event.status === 'preparation' && (
-                      <button
-                        onClick={() => handleStartEvent(event.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
-                      >
-                        <Play className="w-3.5 h-3.5" /> 開始活動
+                    {/* 審核人選擇 + 提醒 */}
+                    {event.status === 'preparation' && (!event.start_approval_status || event.start_approval_status === 'rejected') && (
+                      <div className="mr-2">
+                        <ReviewerSelector type="event" title={event.title}
+                          selectedId={eventReviewers[event.id] || null}
+                          onSelectReviewer={(id) => setEventReviewers(prev => ({ ...prev, [event.id]: id || '' }))}
+                          link={`/dashboard/leader/event-prep`}
+                        />
+                      </div>
+                    )}
+                    {/* 開始/審批活動 */}
+                    {event.status === 'preparation' && (!event.start_approval_status || event.start_approval_status === 'rejected') && isExec && (
+                      <button onClick={() => handleRequestStart(event.id)}
+                        disabled={!eventReviewers[event.id]}
+                        title={!eventReviewers[event.id] ? '請先選擇審核人' : ''}
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Play className="w-3.5 h-3.5" /> 申請開始活動
                       </button>
+                    )}
+                    {event.status === 'preparation' && event.start_approval_status === 'pending' && isChair && (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                          <Clock className="w-3 h-3" /> 待批核
+                        </span>
+                        <button onClick={() => handleStartEvent(event.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100">
+                          <CheckCircle className="w-3.5 h-3.5" /> 批准開始
+                        </button>
+                        <button onClick={() => handleRejectStart(event.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">
+                          <XCircle className="w-3.5 h-3.5" /> 退回
+                        </button>
+                      </div>
+                    )}
+                    {event.start_approval_comment && event.start_approval_status === 'rejected' && (
+                      <div className="mt-2 text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
+                        💬 {event.start_approval_comment}
+                      </div>
                     )}
                     {isChair && event.status === 'active' && (
                       <button
@@ -293,24 +343,21 @@ export default function EventPrepPage() {
                       </button>
                     )}
                     {event.status === 'preparation' && (
-                      <>
-                        <button
-                          onClick={() => { setSelectedEvent(event.id); setShowModal(true) }}
-                          className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> 新增項目
-                        </button>
-                        {isChair && (
-                          <button
-                            onClick={() => handleDeleteEvent(event.id)}
-                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="刪除活動"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </>
+                      <button
+                        onClick={() => { setSelectedEvent(event.id); setShowModal(true) }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> 新增項目
+                      </button>
                     )}
+                    {/* 刪除按鈕 — 任何狀態、任何執委會成員都可以刪 */}
+                    <button
+                      onClick={() => handleDeleteEvent(event.id)}
+                      className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="刪除活動"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>

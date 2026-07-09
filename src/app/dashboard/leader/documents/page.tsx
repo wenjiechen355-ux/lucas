@@ -1,5 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { FileText, CheckCircle, XCircle, Clock, TrendingUp, ArrowRight } from 'lucide-react'
+import { FileText, CheckCircle, XCircle, Clock, TrendingUp, ArrowRight, Play } from 'lucide-react'
 
 export default async function LeaderDocumentsPage() {
   const supabase = await createServerSupabaseClient()
@@ -19,15 +19,25 @@ export default async function LeaderDocumentsPage() {
     .order('updated_at', { ascending: false })
     .limit(50)
 
+  // 活動開始審批
+  const { data: eventApprovals } = await supabase
+    .from('events')
+    .select('id,title,status,start_approval_status,start_approval_comment,plan_doc_path,plan_doc_name,created_by,created_at,updated_at')
+    .in('start_approval_status', ['pending', 'approved', 'rejected'])
+    .order('updated_at', { ascending: false })
+    .limit(50)
+
   // 合併待審批
   const docPending = documents?.filter(d => d.status === 'pending') || []
   const progPending = progressItems?.filter(p => p.document_status === 'pending') || []
-  const pendingAll = [...docPending, ...progPending]
+  const eventPending = eventApprovals?.filter(e => e.start_approval_status === 'pending') || []
+  const pendingAll = [...docPending, ...progPending, ...eventPending]
 
   // 合併已處理
   const docReviewed = documents?.filter(d => d.status !== 'pending') || []
   const progReviewed = progressItems?.filter(p => p.document_status !== 'pending') || []
-  const reviewedAll = [...docReviewed, ...progReviewed].sort((a, b) => 
+  const eventReviewed = eventApprovals?.filter(e => e.start_approval_status !== 'pending') || []
+  const reviewedAll = [...docReviewed, ...progReviewed, ...eventReviewed].sort((a, b) => 
     new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
   )
 
@@ -38,7 +48,7 @@ export default async function LeaderDocumentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">文檔審批</h1>
           <p className="text-gray-500 mt-1">
             {pendingAll.length > 0
-              ? `${pendingAll.length} 份待審批（文檔 ${docPending.length} + 進度 ${progPending.length}）`
+              ? `${pendingAll.length} 份待審批（文檔 ${docPending.length} + 進度 ${progPending.length} + 活動 ${eventPending.length}）`
               : '所有文檔已處理'}
           </p>
         </div>
@@ -46,9 +56,11 @@ export default async function LeaderDocumentsPage() {
 
       {/* Tab 提示 */}
       <div className="flex items-center gap-2 mb-4 text-xs text-gray-400">
-        <FileText className="w-3.5 h-3.5" /> 文檔上載
+        <FileText className="w-3.5 h-3.5" /> 文檔
         <ArrowRight className="w-3 h-3" />
-        <TrendingUp className="w-3.5 h-3.5" /> 進度審批
+        <TrendingUp className="w-3.5 h-3.5" /> 進度
+        <ArrowRight className="w-3 h-3" />
+        <Play className="w-3.5 h-3.5" /> 活動審批
         <ArrowRight className="w-3 h-3" />
         <span>主席/副主席審核</span>
       </div>
@@ -89,15 +101,15 @@ export default async function LeaderDocumentsPage() {
 }
 
 function ReviewCard({ item }: { item: any }) {
-  // 判斷係 documents 定 progress_items
   const isProgress = 'document_status' in item
-  const status = isProgress ? (item.document_status || 'pending') : (item.status || 'pending')
-  const title = isProgress ? item.title : (item.title || '未命名')
-  const fileName = isProgress ? item.document_name : item.file_name
-  const memberName = item.profiles?.full_name || '(未知)'
+  const isEvent = 'start_approval_status' in item
+  const status = isEvent ? (item.start_approval_status || 'pending') : isProgress ? (item.document_status || 'pending') : (item.status || 'pending')
+  const title = isEvent ? `活動開始審批：${item.title}` : isProgress ? item.title : (item.title || '未命名')
+  const fileName = isEvent ? item.plan_doc_name : isProgress ? item.document_name : item.file_name
+  const memberName = isEvent ? '(執委會活動)' : (item.profiles?.full_name || '(未知)')
   const createdAt = new Date(item.created_at || item.updated_at).toLocaleDateString('zh-HK')
-  const reviewComment = isProgress ? item.reviewer_comment : item.review_comment
-  const reviewLink = isProgress ? `/dashboard/progress/${item.id}` : `/dashboard/leader/documents/${item.id}`
+  const reviewComment = isEvent ? item.start_approval_comment : isProgress ? item.reviewer_comment : item.review_comment
+  const reviewLink = isEvent ? '/dashboard/leader/event-prep' : isProgress ? `/dashboard/progress/${item.id}` : `/dashboard/leader/documents/${item.id}`
 
   const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
     pending: { icon: Clock, color: 'bg-amber-50 text-amber-700', label: '待審批' },
@@ -112,9 +124,11 @@ function ReviewCard({ item }: { item: any }) {
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-            isProgress ? 'bg-purple-50' : 'bg-blue-50'
+            isEvent ? 'bg-amber-50' : isProgress ? 'bg-purple-50' : 'bg-blue-50'
           }`}>
-            {isProgress ? (
+            {isEvent ? (
+              <Play className="w-5 h-5 text-amber-600" />
+            ) : isProgress ? (
               <TrendingUp className="w-5 h-5 text-purple-600" />
             ) : (
               <FileText className="w-5 h-5 text-blue-600" />
@@ -123,6 +137,9 @@ function ReviewCard({ item }: { item: any }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="font-medium text-gray-900">{title}</h3>
+              {isEvent && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-600">活動審批</span>
+              )}
               {isProgress && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-600">進度</span>
               )}

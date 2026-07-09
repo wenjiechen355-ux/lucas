@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, File, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import ReviewerSelector from '@/components/reviewer-selector'
 
 export default function UploadDocumentPage() {
   const [title, setTitle] = useState('')
@@ -11,6 +12,7 @@ export default function UploadDocumentPage() {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [reviewerId, setReviewerId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -124,9 +126,18 @@ export default function UploadDocumentPage() {
           <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
         )}
 
+        {/* 審核人選擇 + 提醒 */}
+        <div className="pt-2 border-t border-gray-100">
+          <ReviewerSelector type="document" title={title || '文檔'}
+            selectedId={reviewerId}
+            onSelectReviewer={setReviewerId}
+            link="/dashboard/leader/documents" />
+        </div>
+
         <button
           type="submit"
-          disabled={uploading || !file || !title}
+          disabled={uploading || !file || !title || !reviewerId}
+          title={!reviewerId ? '請先選擇審核人' : ''}
           className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-green-700 disabled:opacity-50 transition-colors"
         >
           {uploading ? '上載中...' : '提交審批'}

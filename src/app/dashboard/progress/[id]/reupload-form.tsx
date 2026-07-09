@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileText, Upload, Loader2, RefreshCw } from 'lucide-react'
+import ReviewerSelector from '@/components/reviewer-selector'
 
 interface ReuploadFormProps {
   progressId: string
@@ -16,6 +17,7 @@ export default function ReuploadForm({ progressId, documentName, documentStatus,
   const [uploading, setUploading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState('')
+  const [reviewerId, setReviewerId] = useState<string | null>(null)
 
   const isPending = documentStatus === 'pending'
   const isApproved = documentStatus === 'approved'
@@ -27,6 +29,10 @@ export default function ReuploadForm({ progressId, documentName, documentStatus,
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!reviewerId) {
+      setError('請先選擇一位審核人（主席/副主席）')
+      return
+    }
     setUploading(true)
     setError('')
 
@@ -82,8 +88,9 @@ export default function ReuploadForm({ progressId, documentName, documentStatus,
               />
               <button
                 type="submit"
-                disabled={uploading}
+                disabled={uploading || !reviewerId}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
+                title={!reviewerId ? '請先選擇審核人' : ''}
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 {uploading ? '上載中...' : '上載'}
@@ -98,6 +105,15 @@ export default function ReuploadForm({ progressId, documentName, documentStatus,
               {isApproved && '（已批核）'}
               {isRejected && '（已退回）'}
             </p>
+          )}
+          {/* 審核人選擇 + 提醒郵件 — 上載前/待審批時顯示 */}
+          {!isApproved && !isCompleted && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <ReviewerSelector type="progress" title={documentName || '進度項目'}
+                selectedId={reviewerId}
+                onSelectReviewer={setReviewerId}
+                link={typeof window !== 'undefined' ? `${window.location.origin}/dashboard/progress/${progressId}` : ''} />
+            </div>
           )}
           {isApproved && (
             <button

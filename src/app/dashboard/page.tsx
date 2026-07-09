@@ -1,5 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { LayoutDashboard, ClipboardCheck, TrendingUp, FileText, Users, Calendar, Eye } from 'lucide-react'
+import { LayoutDashboard, ClipboardCheck, TrendingUp, FileText, Users, Calendar, Eye, Megaphone, Pin } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -54,6 +54,14 @@ export default async function DashboardPage() {
       safeCount(supabase.from('documents').select('*', { count: 'exact', head: true }).eq('status', 'pending')),
     ])
 
+  // 公告
+  const { data: announcements } = await supabase
+    .from('announcements')
+    .select('*, profiles!announcements_created_by_fkey(full_name,position)')
+    .order('is_pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(5)
+
   return (
     <div>
       <div className="mb-8">
@@ -74,6 +82,27 @@ export default async function DashboardPage() {
         <StatCard icon={LayoutDashboard} label="活動總數"
           value={String(eventCount)} sub="已舉辦活動" color="purple" />
       </div>
+
+      {/* 公告 */}
+      {announcements && announcements.length > 0 && (
+        <div className="mb-8">
+          <h2 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
+            <Megaphone className="w-4 h-4" /> 最新公告
+          </h2>
+          <div className="space-y-2">
+            {announcements.slice(0, 3).map(a => (
+              <div key={a.id} className={`bg-white rounded-xl border p-4 ${a.is_pinned ? 'border-amber-200 bg-amber-50/20' : 'border-gray-200'}`}>
+                <div className="flex items-center gap-2">
+                  {a.is_pinned && <Pin className="w-3.5 h-3.5 text-amber-500" />}
+                  <h3 className="font-medium text-gray-900 text-sm">{a.title}</h3>
+                  <span className="text-xs text-gray-400 ml-auto">{new Date(a.created_at).toLocaleDateString('zh-HK')}</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{a.content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 快速入口 */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">

@@ -1,9 +1,10 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { CheckCircle, XCircle, Users, FileText } from 'lucide-react'
+import { CheckCircle, XCircle, Users, FileText, Calendar } from 'lucide-react'
 import DeleteEventForm from './delete-event-form'
 import LocationMap from '@/components/location-map'
 import AgendaUpload from './agenda-upload'
+import SetDateForm from './set-date-form'
 
 export default async function EventAttendancePage({
   params,
@@ -51,7 +52,13 @@ export default async function EventAttendancePage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{event.title}</h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-              <span>{new Date(event.event_date).toLocaleDateString('zh-HK')}</span>
+              {event.event_date ? (
+                <span>{new Date(event.event_date).toLocaleDateString('zh-HK')}</span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs font-medium">
+                  <Calendar className="w-3 h-3" /> 日期待定
+                </span>
+              )}
               {event.location && <span>📍 {event.location}</span>}
             </div>
             {event.description && (
@@ -71,6 +78,13 @@ export default async function EventAttendancePage({
           </div>
         )}
       </div>
+
+      {/* 設定日期 — 日期待定時顯示 */}
+      {!event.event_date && (
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 mb-6">
+          <SetDateForm eventId={eventId} />
+        </div>
+      )}
 
       {/* 議程上載 — 執委會開會 */}
       {event.is_meeting && (

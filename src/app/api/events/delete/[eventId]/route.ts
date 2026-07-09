@@ -20,7 +20,7 @@ export async function POST(
   const { data: profile } = await supabase
     .from('profiles').select('role,position').eq('id', user.id).single()
 
-  const canDelete = profile?.role === 'leader' || ['主席','副主席'].includes(profile?.position || '')
+  const canDelete = profile?.role === 'leader' || !!profile?.position
   if (!canDelete) return NextResponse.json({ error: '無權限' }, { status: 403 })
 
   await supabase.from('attendance').delete().eq('event_id', eventId)

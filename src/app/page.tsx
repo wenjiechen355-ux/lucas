@@ -38,18 +38,12 @@ export default function LandingPage() {
             一站式追蹤成員進度、管理活動出席、處理文檔簽批，提升執委會工作效率
           </p>
           <div className="flex gap-4 justify-center">
-            <Link
-              href="/auth/login"
-              className="bg-green-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
-            >
-              立即登入
-            </Link>
-            <Link
-              href="/auth/login?signup=true"
-              className="bg-white text-green-700 border-2 border-green-600 px-8 py-3 rounded-lg font-medium hover:bg-green-50 transition-colors"
-            >
-              申請帳號
-            </Link>
+          <Link
+            href="/auth/login"
+            className="bg-green-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            立即登入
+          </Link>
           </div>
         </div>
       </section>
