@@ -6,6 +6,7 @@ import LocationMap from '@/components/location-map'
 import AgendaUpload from './agenda-upload'
 import SetDateForm from './set-date-form'
 import GoogleCalendarBtn from '@/components/google-calendar-btn'
+import EventPhotos from '@/components/event-photos'
 
 export default async function EventAttendancePage({
   params,
@@ -200,6 +201,11 @@ export default async function EventAttendancePage({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Photos */}
+      <div className="mt-8">
+        <EventPhotos eventId={eventId} />
       </div>
     </div>
   )
