@@ -14,6 +14,8 @@ interface Field {
   date_range?: { start: string; end: string }
 }
 
+type EventType = 'unit' | 'joint' | 'exchange'
+
 export default function EventPollsPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -24,6 +26,7 @@ export default function EventPollsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [pollTitle, setPollTitle] = useState('')
   const [pollDesc, setPollDesc] = useState('')
+  const [eventType, setEventType] = useState<EventType>('unit')
   const [fields, setFields] = useState<Field[]>([{ label: '日期', type: 'multiple', options: [{ label: '' }] }])
   const [creating, setCreating] = useState(false)
 
@@ -85,10 +88,11 @@ export default function EventPollsPage() {
 
     const { error } = await supabase.from('event_polls').insert({
       title: pollTitle, description: pollDesc || null,
+      event_type: eventType,
       fields: fields, created_by: profile?.id,
     })
     if (error) alert(error.message)
-    else { setShowCreate(false); setPollTitle(''); setPollDesc(''); setFields([{ label: '日期', type: 'multiple', options: [{ label: '' }] }]); loadData() }
+    else { setShowCreate(false); setPollTitle(''); setPollDesc(''); setEventType('unit'); setFields([{ label: '日期', type: 'multiple', options: [{ label: '' }] }]); loadData() }
     setCreating(false)
   }
 
@@ -150,6 +154,16 @@ export default function EventPollsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">說明（可選）</label>
             <textarea value={pollDesc} onChange={e => setPollDesc(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none resize-none" rows={2} placeholder="投票詳情..." />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">活動類型 *</label>
+            <select value={eventType} onChange={e => setEventType(e.target.value as EventType)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white">
+              <option value="unit">團部活動</option>
+              <option value="joint">聯團活動（兩個旅部聯合）</option>
+              <option value="exchange">外出交流活動</option>
+            </select>
           </div>
 
           {/* Fields */}
@@ -331,6 +345,13 @@ function PollCardV2({ poll, profile, isExec, onVote, onClose, onDelete }: any) {
         <div>
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-gray-900">{poll.title}</h3>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+              poll.event_type === 'unit' ? 'bg-green-50 text-green-600' :
+              poll.event_type === 'joint' ? 'bg-blue-50 text-blue-600' :
+              'bg-orange-50 text-orange-600'
+            }`}>
+              {poll.event_type === 'unit' ? '團部' : poll.event_type === 'joint' ? '聯團' : '外出交流'}
+            </span>
             {isOpen ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-600">投票中</span>
               : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">已結束</span>}
           </div>

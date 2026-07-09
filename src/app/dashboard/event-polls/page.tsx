@@ -71,7 +71,16 @@ export default function MemberEventPollsPage() {
             return (
               <div key={poll.id} className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="mb-3">
-                  <h3 className="font-semibold text-gray-900">{poll.title}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900">{poll.title}</h3>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                      poll.event_type === 'unit' ? 'bg-green-50 text-green-600' :
+                      poll.event_type === 'joint' ? 'bg-blue-50 text-blue-600' :
+                      'bg-orange-50 text-orange-600'
+                    }`}>
+                      {poll.event_type === 'unit' ? '團部' : poll.event_type === 'joint' ? '聯團' : '外出交流'}
+                    </span>
+                  </div>
                   {poll.description && <p className="text-sm text-gray-500 mt-1">{poll.description}</p>}
                   <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><Users className="w-3 h-3" /> {totalVoters} 人已投票</p>
                 </div>
