@@ -41,25 +41,10 @@ CREATE POLICY "leader_manage_member_badges" ON member_badges FOR ALL USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'leader')
 );
 
--- 预设勋章（段章）
+-- 预设勋章（4大段章）
 INSERT INTO badges (name, category, description, icon, sort_order) VALUES
   ('會員章', '段章', '成為童軍會員的基本章', '🔰', 1),
   ('初級章', '段章', '完成初級訓練', '⭐', 2),
   ('中級章', '段章', '完成中級訓練', '🌟', 3),
-  ('高級章', '段章', '完成高級訓練', '💫', 4),
-  ('總領袖章', '段章', '最高榮譽', '👑', 5)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO badges (name, category, description, icon, sort_order) VALUES
-  ('露營章', '技能章', '完成露營訓練及實踐', '🏕️', 10),
-  ('急救章', '技能章', '完成急救訓練', '🩹', 11),
-  ('繩結章', '技能章', '掌握基本繩結技巧', '🪢', 12),
-  ('定向章', '技能章', '完成定向訓練', '🧭', 13),
-  ('先鋒章', '技能章', '完成先鋒工程訓練', '🔧', 14)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO badges (name, category, description, icon, sort_order) VALUES
-  ('服務章', '服務章', '完成指定時數社區服務', '🤝', 20),
-  ('環境章', '服務章', '參與環保活動', '🌿', 21),
-  ('領袖章', '服務章', '擔任小隊領袖', '🎖️', 22)
+  ('高級章', '段章', '完成高級訓練', '💫', 4)
 ON CONFLICT DO NOTHING;
