@@ -19,7 +19,10 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays } from 'lucide-react'
+import { Search } from 'lucide-react'
 import NotifBell from '@/components/notif-bell'
+import ThemeToggle from '@/components/theme-toggle'
+import GlobalSearch from '@/components/global-search'
 
 const memberNavItems = [
   { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
@@ -131,9 +134,9 @@ export default function DashboardShell({
         </nav>
 
         {/* 底部 */}
-        <div className="border-t border-gray-100 p-3 space-y-1">
+        <div className="border-t border-gray-100 dark:border-slate-800 p-3 space-y-1">
           <NotifBell />
-          <Link href="/dashboard/profile"
+          <ThemeToggle />          <Link href="/dashboard/profile"
             className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
               pathname === '/dashboard/profile'
                 ? 'bg-green-50 text-green-700'
@@ -165,15 +168,25 @@ export default function DashboardShell({
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 顶部栏（移动端） */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 lg:px-6 lg:hidden">
+        {/* 顶部栏 */}
+        <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 lg:px-6">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 -ml-2 rounded-lg hover:bg-gray-100"
+            className="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 lg:hidden"
           >
-            <Menu className="w-5 h-5 text-gray-600" />
+            <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
           </button>
-          <h2 className="ml-3 font-semibold text-gray-900 text-sm">第一旅深資團執委會</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm lg:hidden">第一旅深資團執委會</h2>
+
+          {/* Search trigger - desktop */}
+          <button
+            onClick={() => (window as any).__toggleSearch?.()}
+            className="hidden lg:flex items-center gap-2 px-4 py-2 mr-2 text-sm text-gray-400 bg-gray-100 dark:bg-slate-800 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            <span>搜尋...</span>
+            <kbd className="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400 ml-4">Ctrl+K</kbd>
+          </button>
         </header>
 
         {/* 页面内容 */}
@@ -181,6 +194,9 @@ export default function DashboardShell({
           {children}
         </main>
       </div>
+
+      {/* Global search modal */}
+      <GlobalSearch />
     </div>
   )
 }
