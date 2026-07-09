@@ -5,6 +5,7 @@ import DeleteEventForm from './delete-event-form'
 import LocationMap from '@/components/location-map'
 import AgendaUpload from './agenda-upload'
 import SetDateForm from './set-date-form'
+import GoogleCalendarBtn from '@/components/google-calendar-btn'
 
 export default async function EventAttendancePage({
   params,
@@ -68,6 +69,16 @@ export default async function EventAttendancePage({
               <span className="inline-flex items-center gap-1 mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">
                 <Users className="w-3 h-3" /> 僅限執委會
               </span>
+            )}
+            {event.event_date && (
+              <div className="mt-2">
+                <GoogleCalendarBtn
+                  title={event.title}
+                  description={event.description || ''}
+                  date={event.event_date || undefined}
+                  location={event.location || ''}
+                />
+              </div>
             )}
           </div>
           {canDelete && <DeleteEventForm eventId={eventId} />}

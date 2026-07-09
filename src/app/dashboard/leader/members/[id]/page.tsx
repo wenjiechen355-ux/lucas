@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Mail, Phone, MapPin, Calendar, Clock, CheckCircle2, XCircle,
-  FileText, Vote, Shield, User, Award, BarChart3, Activity
+  FileText, Vote, Shield, UserIcon, Award, BarChart3, Activity, Medal
 } from 'lucide-react'
 
 export default async function MemberDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,6 +43,20 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
     .eq('member_id', id)
     .order('created_at', { ascending: false })
 
+  // Fetch badges
+  const { data: badges } = await supabase.from('badges').select('*').order('sort_order')
+  const { data: memberBadges } = await supabase
+    .from('member_badges')
+    .select('*')
+    .eq('member_id', id)
+  const badgeMap = new Map((memberBadges || []).map((mb: any) => [mb.badge_id, mb]))
+  const badgesByCategory: Record<string, any[]> = {}
+  for (const badge of (badges || [])) {
+    const cat = badge.category || 'other'
+    if (!badgesByCategory[cat]) badgesByCategory[cat] = []
+    badgesByCategory[cat].push({ ...badge, memberBadge: badgeMap.get(badge.id) || null })
+  }
+
   // Calculate stats
   const attendanceList = attendance || []
   const present = attendanceList.filter(a => a.status === 'present').length
@@ -52,6 +66,8 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
   const progressTotal = (progress || []).length
   const docsApproved = (documents || []).filter(d => d.status === 'approved').length
   const docsTotal = (documents || []).length
+  const badgesTotal = badges?.length || 0
+  const badgesAwarded = (memberBadges || []).filter((mb: any) => mb.status === 'awarded' || mb.status === 'completed').length
 
   return (
     <div>
@@ -139,6 +155,11 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
               <div className="text-2xl font-bold text-purple-600">{docsApproved}</div>
               <div className="text-xs text-gray-500 mt-1">文檔已審批</div>
               <div className="text-xs text-gray-400">共 {docsTotal} 份</div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+              <div className="text-2xl font-bold text-amber-600">{badgesAwarded}</div>
+              <div className="text-xs text-gray-500 mt-1">獎章獲得</div>
+              <div className="text-xs text-gray-400">共 {badgesTotal} 項</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
               <div className="text-2xl font-bold text-orange-600">{pollVotes?.length || 0}</div>
@@ -244,6 +265,48 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Badges */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-4">
+              <Medal className="w-5 h-5 text-amber-600" /> 獎章進度
+            </h3>
+            {(!badges || badges.length === 0) ? (
+              <p className="text-sm text-gray-400 py-4 text-center">暫無獎章</p>
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(badgesByCategory).map(([cat, list]) => {
+                  const completed = list.filter(b => b.memberBadge?.status === 'awarded' || b.memberBadge?.status === 'completed').length
+                  return (
+                    <div key={cat}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-gray-500 uppercase">{cat}</span>
+                        <span className="text-xs text-gray-400">{completed}/{list.length}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {list.map(b => {
+                          const mb = b.memberBadge
+                          const done = mb?.status === 'awarded' || mb?.status === 'completed'
+                          const inProg = mb?.status === 'in_progress'
+                          return (
+                            <div key={b.id} title={b.description || b.name}
+                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                done ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                                inProg ? 'bg-blue-50 border-blue-200 text-blue-600' :
+                                'bg-gray-50 border-gray-200 text-gray-400'
+                              }`}>
+                              <span className="text-sm">{b.icon || '🏅'}</span>
+                              <span>{b.name}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
