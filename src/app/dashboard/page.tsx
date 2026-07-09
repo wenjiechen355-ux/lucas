@@ -100,7 +100,7 @@ export default async function DashboardPage() {
           </h2>
           <div className="space-y-2">
             {announcements.slice(0, 3).map(a => (
-              <div key={a.id} className={`bg-white rounded-xl border p-4 ${a.is_pinned ? 'border-amber-200 bg-amber-50/20' : 'border-gray-200'}`}>
+              <div key={a.id} className={`glass-card rounded-xl p-4 ${a.is_pinned ? 'announcement-pinned' : ''}`}>
                 <div className="flex items-center gap-2">
                   {a.is_pinned && <Pin className="w-3.5 h-3.5 text-amber-500" />}
                   <h3 className="font-medium text-gray-900 text-sm">{a.title}</h3>
@@ -126,7 +126,7 @@ export default async function DashboardPage() {
             <h2 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
               <Cake className="w-4 h-4 text-pink-500" /> 本月生日 ({thisMonth.length})
             </h2>
-            <div className="bg-white rounded-xl border border-pink-100 p-4">
+            <div className="glass-card rounded-xl p-4">
               <div className="flex flex-wrap gap-3">
                 {thisMonth.map(m => {
                   const d = m.birthday ? new Date(m.birthday) : null
@@ -149,7 +149,7 @@ export default async function DashboardPage() {
       })()}
 
       {/* 快速入口 */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="glass-card rounded-xl p-6">
         <h2 className="font-semibold text-gray-900 mb-4">快速操作</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <QuickLink href="/dashboard/attendance" icon={ClipboardCheck} label="打卡簽到" />
@@ -183,8 +183,8 @@ function StatCard({ icon: Icon, label, value, sub, color }: any) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${colorMap[color]}`}>
+    <div className="glass-card rounded-xl p-4">
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 stat-icon ${colorMap[color]}`}>
         <Icon className="w-5 h-5" />
       </div>
       <p className="text-2xl font-bold text-gray-900">{value}</p>
