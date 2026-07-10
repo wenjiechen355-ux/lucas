@@ -15,6 +15,7 @@ export default function NewEventPage() {
   const [location, setLocation] = useState('')
   const [latitude, setLatitude] = useState<number | null>(null)
   const [longitude, setLongitude] = useState<number | null>(null)
+  const [isOnline, setIsOnline] = useState(false)
   // 团部活动专属选项
   const [isExecMeeting, setIsExecMeeting] = useState(false)
   const [requiresMinutes, setRequiresMinutes] = useState(false)
@@ -34,14 +35,15 @@ export default function NewEventPage() {
       formData.append('title', title)
       formData.append('description', description)
       formData.append('event_date', eventDate)
-      formData.append('location', location)
-      if (latitude && longitude) {
+      formData.append('location', isOnline ? '線上' : location)
+      if (!isOnline && latitude && longitude) {
         formData.append('latitude', String(latitude))
         formData.append('longitude', String(longitude))
       }
       formData.append('is_exec_only', String(isExecOnly))
       formData.append('is_exec_meeting', String(isExecMeeting))
       formData.append('requires_minutes', String(requiresMinutes))
+      formData.append('is_online', String(isOnline))
 
       const res = await fetch('/api/events/create', { method: 'POST', body: formData })
       if (res.redirected) {
@@ -161,26 +163,54 @@ export default function NewEventPage() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">地點（可選）</label>
-          <input
-            type="text"
-            value={location}
-            onChange={e => setLocation(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-            placeholder="例如：童軍總部"
-          />
+        {/* 线上活动开关 */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isOnline}
+              onChange={e => {
+                setIsOnline(e.target.checked)
+                if (e.target.checked) {
+                  setLocation('')
+                  setLatitude(null)
+                  setLongitude(null)
+                }
+              }}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div>
+              <span className="text-sm font-medium text-blue-800">線上活動</span>
+              <span className="text-gray-400 ml-1 text-xs">（毋需填寫地址，活動以線上形式進行）</span>
+            </div>
+          </label>
         </div>
 
-        <LocationPicker
-          lat={latitude}
-          lng={longitude}
-          onLocationChange={(lat, lng) => { setLatitude(lat); setLongitude(lng) }}
-          onAddressSelect={(addr) => {
-            const shortName = addr.split(',')[0]
-            setLocation(shortName)
-          }}
-        />
+        {/* 地点 — 线上活动时隐藏 */}
+        {!isOnline && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">地點（可選）</label>
+              <input
+                type="text"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                placeholder="例如：童軍總部"
+              />
+            </div>
+
+            <LocationPicker
+              lat={latitude}
+              lng={longitude}
+              onLocationChange={(lat, lng) => { setLatitude(lat); setLongitude(lng) }}
+              onAddressSelect={(addr) => {
+                const shortName = addr.split(',')[0]
+                setLocation(shortName)
+              }}
+            />
+          </>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">說明（可選）</label>

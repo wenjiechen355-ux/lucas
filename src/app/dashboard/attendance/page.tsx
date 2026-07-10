@@ -59,7 +59,11 @@ export default async function AttendancePage() {
                     <h3 className="font-semibold text-gray-900">{event.title}</h3>
                     <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500">
                       <span>{new Date(event.event_date).toLocaleDateString('zh-HK')}</span>
-                      {event.location && <span>📍 {event.location}</span>}
+                      {event.is_online ? (
+                        <span className="inline-flex items-center gap-1 text-blue-600 text-xs">💻 線上</span>
+                      ) : event.location ? (
+                        <span>📍 {event.location}</span>
+                      ) : null}
                     </div>
                     {event.description && (
                       <p className="text-sm text-gray-600 mt-2">{event.description}</p>

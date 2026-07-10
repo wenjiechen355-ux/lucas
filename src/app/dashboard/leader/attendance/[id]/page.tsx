@@ -63,7 +63,13 @@ export default async function EventAttendancePage({
                   <Calendar className="w-3 h-3" /> 日期待定
                 </span>
               )}
-              {event.location && <span>📍 {event.location}</span>}
+              {event.is_online ? (
+                <span className="inline-flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-xs font-medium">
+                  💻 線上
+                </span>
+              ) : event.location ? (
+                <span>📍 {event.location}</span>
+              ) : null}
             </div>
             {event.description && (
               <p className="text-sm text-gray-600 mt-2">{event.description}</p>
@@ -79,14 +85,14 @@ export default async function EventAttendancePage({
                   title={event.title}
                   description={event.description || ''}
                   date={event.event_date || undefined}
-                  location={event.location || ''}
+                  location={event.is_online ? '線上' : (event.location || '')}
                 />
               </div>
             )}
           </div>
           {canDelete && <DeleteEventForm eventId={eventId} />}
         </div>
-        {event.latitude && event.longitude && (
+        {!event.is_online && event.latitude && event.longitude && (
           <div className="mt-3">
             <LocationMap lat={event.latitude} lng={event.longitude} label={event.location || '活動地點'} />
           </div>

@@ -44,7 +44,11 @@ export default async function LeaderAttendancePage() {
                 <h3 className="font-semibold text-gray-900">{event.title}</h3>
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                   <span>{new Date(event.event_date).toLocaleDateString('zh-HK')}</span>
-                  {event.location && <span>📍 {event.location}</span>}
+                  {event.is_online ? (
+                    <span className="inline-flex items-center gap-1 text-blue-600 text-xs">💻 線上</span>
+                  ) : event.location ? (
+                    <span>📍 {event.location}</span>
+                  ) : null}
                   <span className="flex items-center gap-1">
                     <ClipboardCheck className="w-4 h-4" />
                     出席記錄: {event.attendance?.[0]?.count || 0}

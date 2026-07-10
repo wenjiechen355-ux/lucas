@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
   const requiresMinutes = formData.get('requires_minutes') === 'true'
   const latitude = formData.get('latitude') ? parseFloat(formData.get('latitude') as string) : null
   const longitude = formData.get('longitude') ? parseFloat(formData.get('longitude') as string) : null
+  const isOnline = formData.get('is_online') === 'true'
 
   if (!title) {
     return NextResponse.json({ error: '请填写活动标题' }, { status: 400 })
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
     is_meeting: finalRequiresMinutes, // 保留兼容旧 UI
     latitude: latitude,
     longitude: longitude,
+    is_online: isOnline,
   })
 
   if (error) {
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
   await notifyAll({
     type: 'activity',
     title: `新活動：${title}`,
-    message: description || `日期：${eventDate ? new Date(eventDate).toLocaleDateString('zh-HK') : '待定'}，地點：${location || '未指定'}`,
+    message: description || `日期：${eventDate ? new Date(eventDate).toLocaleDateString('zh-HK') : '待定'}，地點：${isOnline ? '線上' : (location || '未指定')}`,
     link: '/dashboard/attendance',
   })
 

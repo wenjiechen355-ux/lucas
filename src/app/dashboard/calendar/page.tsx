@@ -29,7 +29,7 @@ export default function CalendarPage() {
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
     const isExec = !!prof?.position
-    let query = supabase.from('events').select('id,title,event_date,location,description,is_exec_only,is_meeting').gte('event_date', `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-01`)
+    let query = supabase.from('events').select('id,title,event_date,location,description,is_exec_only,is_meeting,is_online').gte('event_date', `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-01`)
     if (!isExec) query = query.eq('is_exec_only', false)
     const { data } = await query.order('event_date', { ascending: true }).limit(100)
     setEvents(data || [])
@@ -182,7 +182,8 @@ export default function CalendarPage() {
                         {e.is_meeting && <span className="w-2 h-2 rounded-full bg-amber-500" />}
                         <span className="text-sm font-medium text-gray-900 truncate">{e.title}</span>
                       </div>
-                      {e.location && <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{e.location}</p>}
+                      {e.is_online ? <p className="text-xs text-blue-500 mt-1 flex items-center gap-1">💻 線上</p> :
+                       e.location ? <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{e.location}</p> : null}
                     </a>
                   ))}
                 </div>

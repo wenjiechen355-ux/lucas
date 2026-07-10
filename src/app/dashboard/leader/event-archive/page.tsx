@@ -20,6 +20,7 @@ interface EventData {
   is_meeting?: boolean
   minutes_doc_path?: string
   minutes_doc_name?: string
+  is_online?: boolean
 }
 
 interface ProgressItem {
@@ -183,7 +184,8 @@ export default function EventArchivePage() {
                       </div>
                       <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                         <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{new Date(event.event_date).toLocaleDateString('zh-HK')}</span>
-                        {event.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{event.location}</span>}
+                        {event.is_online ? <span className="flex items-center gap-1 text-blue-600">💻 線上</span> :
+                         event.location ? <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{event.location}</span> : null}
                       </div>
                     </div>
                   </div>

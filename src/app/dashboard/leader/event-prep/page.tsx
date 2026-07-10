@@ -36,6 +36,7 @@ interface EventData {
   agenda_raw_text?: string
   agenda_analysis?: string
   agenda_analysis_status?: string
+  is_online?: boolean
   start_approved?: boolean
   start_approval_status?: string
   start_approval_comment?: string
@@ -295,7 +296,8 @@ export default function EventPrepPage() {
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                       <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{new Date(event.event_date).toLocaleDateString('zh-HK')}</span>
-                      {event.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{event.location}</span>}
+                      {event.is_online ? <span className="flex items-center gap-1 text-blue-600">💻 線上</span> :
+                       event.location ? <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{event.location}</span> : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
