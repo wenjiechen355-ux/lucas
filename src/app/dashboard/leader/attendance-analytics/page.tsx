@@ -1,6 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import AttendanceCharts from './charts'
+import ChartsWrapper from './charts-wrapper'
 
 interface EventAttendance {
   id: string
@@ -126,7 +126,7 @@ export default async function AttendanceAnalyticsPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">出席率分析看板</h1>
       <p className="text-sm text-gray-500 mb-6">全維度活動出勤數據分析與可視化</p>
 
-      <AttendanceCharts
+      <ChartsWrapper
         totalEvents={totalEvents}
         avgRate={avgRate}
         monthRate={monthRate}

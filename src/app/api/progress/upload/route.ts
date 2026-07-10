@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { revalidatePath } from 'next/cache'
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
@@ -44,5 +45,6 @@ export async function POST(request: NextRequest) {
     .eq('id', progressId)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
+  revalidatePath('/dashboard/progress')
   return NextResponse.json({ success: true, id: progressId })
 }
