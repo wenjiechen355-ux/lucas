@@ -107,6 +107,9 @@ export default async function EventAttendancePage({
             eventId={eventId}
             agendaPath={event.agenda_doc_path}
             agendaName={event.agenda_doc_name}
+            agendaRawText={event.agenda_raw_text}
+            agendaAnalysis={event.agenda_analysis}
+            agendaAnalysisStatus={event.agenda_analysis_status}
           />
         </div>
       )}

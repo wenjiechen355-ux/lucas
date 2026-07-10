@@ -33,6 +33,9 @@ interface EventData {
   photo_doc_name?: string
   agenda_doc_path?: string
   agenda_doc_name?: string
+  agenda_raw_text?: string
+  agenda_analysis?: string
+  agenda_analysis_status?: string
   start_approved?: boolean
   start_approval_status?: string
   start_approval_comment?: string
@@ -374,6 +377,9 @@ export default function EventPrepPage() {
                     docType="agenda"
                     currentPath={event.agenda_doc_path}
                     currentName={event.agenda_doc_name}
+                    agendaRawText={event.agenda_raw_text}
+                    agendaAnalysis={event.agenda_analysis}
+                    agendaAnalysisStatus={event.agenda_analysis_status}
                   />
                 </div>
               )}
