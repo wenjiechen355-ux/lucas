@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange, Mail } from 'lucide-react'
 import MonthCalendar from '@/components/month-calendar'
+import MemberReminder, { type MemberStatus } from '@/components/member-reminder'
 
 interface Field {
   label: string
@@ -21,6 +22,7 @@ export default function EventPollsPage() {
   const supabase = createClient()
   const [polls, setPolls] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
+  const [allProfiles, setAllProfiles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [showCreate, setShowCreate] = useState(false)
@@ -41,6 +43,8 @@ export default function EventPollsPage() {
     setProfile(prof)
     const { data } = await supabase.from('event_polls').select('*, event_poll_votes(*)').order('created_at', { ascending: false })
     setPolls(data || [])
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, position').order('full_name')
+    setAllProfiles(profiles || [])
     setLoading(false)
   }
 
@@ -283,6 +287,7 @@ export default function EventPollsPage() {
           <div className="space-y-4">
             {openPolls.map(poll => (
               <PollCardV2 key={poll.id} poll={poll} profile={profile} isExec={isExec}
+                allProfiles={allProfiles}
                 onVote={(sels: any) => handleVote(poll.id, sels)}
                 onClose={() => handleClosePoll(poll.id)}
                 onDelete={() => handleDeletePoll(poll.id)}
@@ -301,6 +306,7 @@ export default function EventPollsPage() {
           <div className="space-y-4">
             {closedPolls.map(poll => (
               <PollCardV2 key={poll.id} poll={poll} profile={profile} isExec={isExec}
+                allProfiles={allProfiles}
                 onVote={() => {}} onClose={() => {}} onDelete={() => handleDeletePoll(poll.id)}
                 onNotify={() => handleNotifyExec(poll)} />
             ))}
@@ -316,7 +322,7 @@ export default function EventPollsPage() {
   )
 }
 
-function PollCardV2({ poll, profile, isExec, onVote, onClose, onDelete, onNotify }: any) {
+function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDelete, onNotify }: any) {
   const fields: any[] = poll.fields || []
   const votes: any[] = poll.event_poll_votes || []
   const totalVoters = votes.length
@@ -385,19 +391,43 @@ function PollCardV2({ poll, profile, isExec, onVote, onClose, onDelete, onNotify
           {poll.description && <p className="text-sm text-gray-500 mt-1">{poll.description}</p>}
           <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><Users className="w-3 h-3" /> {totalVoters} 人已投票</p>
         </div>
-        {isExec && isOpen && (
+        {isExec && (
           <div className="flex items-center gap-1">
-            {poll.is_exec_meeting && onNotify && (
-              <button onClick={onNotify}
-                className="px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 flex items-center gap-1">
-                <Mail className="w-3 h-3" />通知執委會
-              </button>
+            {/* Member Reminder */}
+            {(() => {
+              const targetMembers = (allProfiles || []).filter((p: any) => {
+                if (poll.is_exec_meeting) return p.position
+                return true
+              })
+              const members: MemberStatus[] = targetMembers.map((p: any) => ({
+                memberId: p.id,
+                fullName: p.full_name,
+                position: p.position,
+                hasVoted: votes.some((v: any) => v.member_id === p.id),
+              }))
+              return (
+                <MemberReminder
+                  targetTitle={poll.title}
+                  link="https://scout1venture.vercel.app/dashboard/event-polls"
+                  type="poll"
+                  members={members}
+                />
+              )
+            })()}
+            {isOpen && (
+              <>
+                {poll.is_exec_meeting && onNotify && (
+                  <button onClick={onNotify}
+                    className="px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 flex items-center gap-1">
+                    <Mail className="w-3 h-3" />通知執委會
+                  </button>
+                )}
+                <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">結束投票</button>
+              </>
             )}
-            <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">結束投票</button>
             <button onClick={onDelete} className="p-1.5 text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
           </div>
         )}
-        {isExec && !isOpen && <button onClick={onDelete} className="p-1.5 text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>}
       </div>
 
       {/* Fields */}

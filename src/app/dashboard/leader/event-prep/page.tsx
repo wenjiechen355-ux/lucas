@@ -8,6 +8,7 @@ import PlanUploadForm from './plan-upload-form'
 import EventDocUpload from './event-doc-upload'
 import EventTransactions from '@/components/event-transactions'
 import ReviewerSelector from '@/components/reviewer-selector'
+import MemberReminder, { type MemberStatus } from '@/components/member-reminder'
 
 interface Profile {
   id: string
@@ -61,6 +62,8 @@ export default function EventPrepPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [eventReviewers, setEventReviewers] = useState<Record<string, string>>({})
+  const [allMembers, setAllMembers] = useState<Profile[]>([])
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, Record<string, string>>>({})
 
   // Modal state
   const [showModal, setShowModal] = useState(false)
@@ -98,12 +101,32 @@ export default function EventPrepPage() {
       .order('event_date', { ascending: false })
     setEvents(evts || [])
 
+    // Get all members (for reminder)
+    const { data: allMems } = await supabase
+      .from('profiles')
+      .select('id, full_name, position')
+      .order('full_name')
+    setAllMembers(allMems || [])
+
     // Get all prep items
     const { data: items } = await supabase
       .from('event_prep_items')
       .select('*')
       .order('created_at', { ascending: false })
     setPrepItems(items || [])
+
+    // Get all attendance records (for showing status in reminder)
+    const { data: attRecs } = await supabase
+      .from('attendance')
+      .select('event_id, member_id, status')
+    if (attRecs) {
+      const map: Record<string, Record<string, string>> = {}
+      for (const r of attRecs) {
+        if (!map[r.event_id]) map[r.event_id] = {}
+        map[r.event_id][r.member_id] = r.status
+      }
+      setAttendanceMap(map)
+    }
 
     setLoading(false)
   }
@@ -301,6 +324,24 @@ export default function EventPrepPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    {/* Member Reminder */}
+                    {(() => {
+                      const eventAttMap = attendanceMap[event.id] || {}
+                      const members: MemberStatus[] = (allMembers || []).map((m: Profile) => ({
+                        memberId: m.id,
+                        fullName: m.full_name,
+                        position: m.position,
+                        attendanceStatus: (eventAttMap[m.id] || null) as any,
+                      }))
+                      return (
+                        <MemberReminder
+                          targetTitle={event.title}
+                          link={`https://scout1venture.vercel.app/dashboard/attendance`}
+                          type="attendance"
+                          members={members}
+                        />
+                      )
+                    })()}
                     {/* 審核人選擇 + 提醒 */}
                     {event.status === 'preparation' && (!event.start_approval_status || event.start_approval_status === 'rejected') && (
                       <div className="mr-2">
