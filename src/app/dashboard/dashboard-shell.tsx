@@ -18,7 +18,7 @@ import {
   User,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays, Wallet } from 'lucide-react'
+import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays, Wallet, BarChart3 } from 'lucide-react'
 import { Search } from 'lucide-react'
 import NotifBell from '@/components/notif-bell'
 import ThemeToggle from '@/components/theme-toggle'
@@ -65,8 +65,9 @@ export default function DashboardShell({
   const isLeader = profile.role === 'leader'
   const isExec = !!profile.position // 所有有職位嘅執委會成員
   const isChair = profile.position === '主席' || profile.position === '副主席'
-  const financeItem = { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet }
-const execItems = isExec ? [prepItem, archiveItem, pollItem, announcementItem, financeItem, createEventItem, viewAttendanceItem] : []
+  const analyticsItem = { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 }
+const financeItem = { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet }
+const execItems = isExec ? [prepItem, archiveItem, pollItem, announcementItem, financeItem, analyticsItem, createEventItem, viewAttendanceItem] : []
   const chairItems = isChair ? [approvalItem] : []
   const navItems = [...(isLeader ? leaderNavItems : memberNavItems), ...execItems, ...chairItems]
 
