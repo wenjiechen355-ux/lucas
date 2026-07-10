@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Wallet, TrendingUp, TrendingDown, DollarSign, ArrowUpCircle, ArrowDownCircle, Calendar } from 'lucide-react'
+import FinanceStatement from '@/components/finance-statement'
 
 export default async function FinancePage() {
   const supabase = await createServerSupabaseClient()
@@ -119,6 +120,9 @@ export default async function FinancePage() {
           )}
         </div>
       </div>
+
+      {/* 收支明細表 */}
+      <FinanceStatement transactions={transactions as any} />
 
       {/* Per-event breakdown */}
       <div>
