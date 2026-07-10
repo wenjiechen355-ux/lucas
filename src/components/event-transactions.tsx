@@ -11,7 +11,15 @@ interface Transaction {
   amount: number
   description: string
   received?: boolean
+  responsible_id?: string
+  paid_back?: boolean
   created_at: string
+}
+
+interface Profile {
+  id: string
+  full_name: string
+  position?: string
 }
 
 const categories = ['團費', '贊助', '場地費', '物資', '交通', '餐飲', '獎品', '印刷', '其他']
@@ -22,6 +30,7 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [profiles, setProfiles] = useState<Profile[]>([])
   const [form, setForm] = useState<{ type: 'income' | 'expense'; category: string; amount: string; description: string }>({ type: 'expense', category: '其他', amount: '', description: '' })
 
   // Excel upload state
@@ -34,7 +43,7 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
   const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null)
   const [showBatchReceipts, setShowBatchReceipts] = useState(false)
 
-  useEffect(() => { loadTxns(); loadReceipts() }, [])
+  useEffect(() => { loadTxns(); loadReceipts(); loadProfiles() }, [])
 
   async function loadTxns() {
     setLoading(true)
@@ -117,6 +126,22 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
     const newVal = !txn.received
     await supabase.from('event_transactions').update({ received: newVal }).eq('id', txn.id)
     loadTxns()
+  }
+
+  async function loadProfiles() {
+    const { data } = await supabase.from('profiles').select('id, full_name, position').order('full_name')
+    setProfiles(data || [])
+  }
+
+  async function updateResponsible(txnId: string, responsibleId: string) {
+    await supabase.from('event_transactions').update({ responsible_id: responsibleId || null }).eq('id', txnId)
+    setTxns(txns.map(t => t.id === txnId ? { ...t, responsible_id: responsibleId || undefined } : t))
+  }
+
+  async function togglePaidBack(txn: Transaction) {
+    const newVal = !txn.paid_back
+    await supabase.from('event_transactions').update({ paid_back: newVal }).eq('id', txn.id)
+    setTxns(txns.map(t => t.id === txn.id ? { ...t, paid_back: newVal } : t))
   }
 
   async function loadReceipts() {
@@ -380,6 +405,33 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
                   )}
                 </div>
                 {t.description && <p className="text-xs text-gray-500 truncate">{t.description}</p>}
+                {/* Responsible + paid_back for expense */}
+                {t.type === 'expense' && isExec && (
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <select
+                      value={t.responsible_id || ''}
+                      onChange={e => updateResponsible(t.id, e.target.value)}
+                      className="text-xs px-2 py-0.5 rounded border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200"
+                    >
+                      <option value="">揀負責人</option>
+                      {profiles.map(p => (
+                        <option key={p.id} value={p.id}>{p.full_name}{p.position ? ` (${p.position})` : ''}</option>
+                      ))}
+                    </select>
+                    {t.responsible_id && (
+                      <button
+                        onClick={() => togglePaidBack(t)}
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
+                          t.paid_back
+                            ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                            : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                        }`}
+                      >
+                        {t.paid_back ? '✅ 已俾錢' : '💰 未俾錢'}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-gray-400">{new Date(t.created_at).toLocaleDateString('zh-HK')}</p>
               </div>
               {isExec && (
