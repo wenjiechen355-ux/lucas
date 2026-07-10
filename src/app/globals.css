@@ -249,6 +249,124 @@ main .grid [class*="bg-white"]:hover {
     0 20px 60px rgba(0,0,0,.3);
 }
 
+/* ===== GLOBAL 3D EFFECTS — all pages ===== */
+
+/* All white/rounded containers → glass + depth */
+main [class*="bg-white"][class*="rounded"],
+main [class*="bg-white"][class*="rounded"],
+main [class*="rounded-xl"]:not([class*="glass-"]),
+main [class*="rounded-2xl"]:not([class*="glass-"]) {
+  transition: all .35s cubic-bezier(.23,1,.32,1);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.9),
+    0 2px 8px rgba(0,0,0,.04),
+    0 4px 16px rgba(0,0,0,.03);
+  border-color: rgba(148,163,184,.08);
+}
+main [class*="bg-white"][class*="rounded"]:hover,
+main [class*="rounded-xl"]:hover:not([class*="glass-"]),
+main [class*="rounded-2xl"]:hover:not([class*="glass-"]) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.9),
+    0 4px 16px rgba(22,163,74,.08),
+    0 8px 32px rgba(0,0,0,.06);
+  border-color: rgba(22,163,74,.1);
+}
+.dark main [class*="bg-white"][class*="rounded"],
+.dark main [class*="rounded-xl"]:not([class*="glass-"]),
+.dark main [class*="rounded-2xl"]:not([class*="glass-"]) {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.03),
+    0 2px 8px rgba(0,0,0,.15),
+    0 4px 16px rgba(0,0,0,.1);
+}
+
+/* 3D buttons — all green buttons */
+main button[class*="bg-green"]:not([class*="glass-"]),
+main a[class*="bg-green"]:not([class*="glass-"]) {
+  box-shadow: 0 3px 0 #15803d, 0 4px 12px rgba(22,163,74,.25), inset 0 1px 0 rgba(255,255,255,.2);
+  transition: all .2s cubic-bezier(.23,1,.32,1);
+}
+main button[class*="bg-green"]:hover:not([class*="glass-"]),
+main a[class*="bg-green"]:hover:not([class*="glass-"]) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 #15803d, 0 6px 20px rgba(22,163,74,.35), inset 0 1px 0 rgba(255,255,255,.3);
+}
+main button[class*="bg-green"]:active:not([class*="glass-"]),
+main a[class*="bg-green"]:active:not([class*="glass-"]) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #15803d, 0 2px 6px rgba(22,163,74,.2);
+}
+
+/* All interactive list items */
+main li[class*="border-b"]:hover,
+main [class*="divide-y"] > *:hover {
+  transform: translateX(2px);
+  transition: transform .15s ease;
+}
+
+/* Input fields — enhanced */
+main input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+main textarea, main select {
+  transition: all .2s ease;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.04);
+}
+main input:focus:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+main textarea:focus, main select:focus {
+  box-shadow:
+    0 0 0 3px rgba(22,163,74,.15),
+    0 0 20px rgba(22,163,74,.06),
+    inset 0 1px 2px rgba(0,0,0,.04) !important;
+}
+
+/* Divider lines — softer */
+main [class*="divide-y"] > * { border-color: rgba(148,163,184,.08); }
+main hr, main [class*="border-b"] { border-color: rgba(148,163,184,.08); }
+.dark main [class*="divide-y"] > * { border-color: rgba(71,85,105,.2); }
+.dark main hr, .dark main [class*="border-b"] { border-color: rgba(71,85,105,.2); }
+
+/* Status badges */
+main [class*="rounded-full"][class*="text-xs"] {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 1px 2px rgba(0,0,0,.04);
+}
+
+/* Modals / dialogs */
+div[class*="fixed"][class*="bg-black"] > div[class*="bg-white"],
+div[class*="fixed"][class*="bg-black"] > div[class*="rounded"] {
+  box-shadow:
+    0 24px 80px rgba(0,0,0,.15),
+    0 8px 32px rgba(0,0,0,.08),
+    inset 0 1px 0 rgba(255,255,255,.5);
+  border: 1px solid rgba(148,163,184,.1);
+}
+
+/* File input styling */
+main input[type="file"] {
+  background: rgba(22,163,74,.04);
+  border-radius: 8px;
+  padding: 6px;
+  transition: all .2s ease;
+}
+main input[type="file"]:hover {
+  background: rgba(22,163,74,.08);
+}
+
+/* Section headers with subtle underline glow */
+main h2 {
+  position: relative;
+}
+main h2::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 40px;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(22,163,74,.4), transparent);
+  border-radius: 2px;
+}
+
 /* Quick links */
 a[class*="border-gray-200"][class*="rounded-lg"] {
   transition: all .3s cubic-bezier(.23,1,.32,1);
