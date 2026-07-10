@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Mail, X, CheckSquare, Square, Loader2, Send, UserCheck, Vote, CalendarCheck, CalendarX, CalendarMinus } from 'lucide-react'
+import { Mail, X, CheckSquare, Square, Loader2, Send, UserCheck, Vote, CalendarCheck, CalendarX, CalendarMinus, Smartphone } from 'lucide-react'
 
 export interface MemberStatus {
   memberId: string
@@ -23,8 +23,10 @@ interface MemberReminderProps {
 export default function MemberReminder({ targetTitle, link, type, members }: MemberReminderProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [sending, setSending] = useState<Set<string>>(new Set())
-  const [sent, setSent] = useState<Set<string>>(new Set())
+  const [sendingEmail, setSendingEmail] = useState<Set<string>>(new Set())
+  const [sentEmail, setSentEmail] = useState<Set<string>>(new Set())
+  const [sendingSms, setSendingSms] = useState<Set<string>>(new Set())
+  const [sentSms, setSentSms] = useState<Set<string>>(new Set())
 
   function toggleMember(memberId: string) {
     setSelectedIds(prev => {
@@ -45,7 +47,7 @@ export default function MemberReminder({ targetTitle, link, type, members }: Mem
   }
 
   async function sendReminder(memberId: string, fullName: string) {
-    setSending(prev => new Set([...prev, memberId]))
+    setSendingEmail(prev => new Set([...prev, memberId]))
     try {
       const res = await fetch('/api/send-member-reminder', {
         method: 'POST',
@@ -53,25 +55,51 @@ export default function MemberReminder({ targetTitle, link, type, members }: Mem
         body: JSON.stringify({ memberId, type, targetTitle, link }),
       })
       if (res.ok) {
-        setSent(prev => new Set([...prev, memberId]))
+        setSentEmail(prev => new Set([...prev, memberId]))
       } else {
         const d = await res.json()
-        alert(`發送失敗: ${d.error}`)
+        alert(`郵件發送失敗: ${d.error}`)
       }
     } catch {
       alert('網絡錯誤')
     }
-    setSending(prev => {
+    setSendingEmail(prev => {
       const next = new Set(prev)
       next.delete(memberId)
       return next
     })
   }
 
-  async function sendSelected() {
+  async function sendSmsReminder(memberId: string, fullName: string) {
+    setSendingSms(prev => new Set([...prev, memberId]))
+    try {
+      const res = await fetch('/api/send-member-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, type, targetTitle, link }),
+      })
+      if (res.ok) {
+        setSentSms(prev => new Set([...prev, memberId]))
+      } else {
+        const d = await res.json()
+        alert(`SMS 發送失敗: ${d.error}`)
+      }
+    } catch {
+      alert('網絡錯誤')
+    }
+    setSendingSms(prev => {
+      const next = new Set(prev)
+      next.delete(memberId)
+      return next
+    })
+  }
+
+  async function sendSelected(channel: 'email' | 'sms') {
     for (const memberId of selectedIds) {
       const member = members.find(m => m.memberId === memberId)
-      if (member) await sendReminder(memberId, member.fullName)
+      if (!member) continue
+      if (channel === 'email') await sendReminder(memberId, member.fullName)
+      else await sendSmsReminder(memberId, member.fullName)
     }
   }
 
@@ -107,7 +135,7 @@ export default function MemberReminder({ targetTitle, link, type, members }: Mem
             </div>
 
             {/* Stats */}
-            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex gap-4 text-xs">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex gap-4 text-xs flex-wrap">
               <span className="text-gray-500">
                 共 <b className="text-gray-700">{members.length}</b> 人
               </span>
@@ -123,6 +151,9 @@ export default function MemberReminder({ targetTitle, link, type, members }: Mem
               )}
               <span className="text-blue-600">
                 已選: <b>{selectedIds.size}</b>
+              </span>
+              <span className="text-gray-400">
+                💬 郵件 / 📱 SMS
               </span>
             </div>
 
@@ -178,18 +209,33 @@ export default function MemberReminder({ targetTitle, link, type, members }: Mem
                             : <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">無記錄</span>
                     )}
 
-                    {/* Per-member send button */}
+                    {/* Per-member email button */}
                     <button
                       onClick={() => sendReminder(member.memberId, member.fullName)}
-                      disabled={sending.has(member.memberId) || sent.has(member.memberId)}
+                      disabled={sendingEmail.has(member.memberId) || sentEmail.has(member.memberId)}
                       className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors opacity-30 group-hover:opacity-100 disabled:opacity-100"
-                      title={sent.has(member.memberId) ? '已發送' : '發送提醒'}
+                      title={sentEmail.has(member.memberId) ? '郵件已發送' : '發送郵件'}
                     >
-                      {sending.has(member.memberId)
+                      {sendingEmail.has(member.memberId)
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                        : sent.has(member.memberId)
+                        : sentEmail.has(member.memberId)
                           ? <span className="text-xs text-green-600">✓</span>
-                          : <Send className="w-3.5 h-3.5 text-blue-400" />
+                          : <Mail className="w-3.5 h-3.5 text-blue-400" />
+                      }
+                    </button>
+
+                    {/* Per-member SMS button */}
+                    <button
+                      onClick={() => sendSmsReminder(member.memberId, member.fullName)}
+                      disabled={sendingSms.has(member.memberId) || sentSms.has(member.memberId)}
+                      className="p-1.5 rounded-lg hover:bg-green-50 transition-colors opacity-30 group-hover:opacity-100 disabled:opacity-100"
+                      title={sentSms.has(member.memberId) ? 'SMS 已發送' : '發送 SMS'}
+                    >
+                      {sendingSms.has(member.memberId)
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin text-green-500" />
+                        : sentSms.has(member.memberId)
+                          ? <span className="text-xs text-green-600">✓</span>
+                          : <Smartphone className="w-3.5 h-3.5 text-green-400" />
                       }
                     </button>
                   </div>
@@ -202,14 +248,26 @@ export default function MemberReminder({ targetTitle, link, type, members }: Mem
               <span className="text-xs text-gray-400">
                 已選擇 {selectedIds.size} 位成員
               </span>
-              <button
-                onClick={sendSelected}
-                disabled={selectedIds.size === 0}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                發送提醒
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => sendSelected('email')}
+                  disabled={selectedIds.size === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                  title="批量發送郵件"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  發送郵件
+                </button>
+                <button
+                  onClick={() => sendSelected('sms')}
+                  disabled={selectedIds.size === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-40 transition-colors"
+                  title="批量發送 SMS"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  發送 SMS
+                </button>
+              </div>
             </div>
           </div>
         </div>
