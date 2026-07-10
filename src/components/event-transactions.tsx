@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Wallet, Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, FileSpreadsheet, Check, ReceiptText, Paperclip, Upload } from 'lucide-react'
+import { Wallet, Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, FileSpreadsheet, Check, ReceiptText, Paperclip, Upload, HandCoins, CheckCircle2 } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -10,6 +10,7 @@ interface Transaction {
   category: string
   amount: number
   description: string
+  received?: boolean
   created_at: string
 }
 
@@ -108,6 +109,13 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
   async function handleDelete(id: string) {
     if (!confirm('確定刪除此記錄？')) return
     await supabase.from('event_transactions').delete().eq('id', id)
+    loadTxns()
+  }
+
+  async function toggleReceived(txn: Transaction) {
+    if (!isExec) return
+    const newVal = !txn.received
+    await supabase.from('event_transactions').update({ received: newVal }).eq('id', txn.id)
     loadTxns()
   }
 
@@ -338,6 +346,21 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
                   <span className={`text-sm font-semibold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                     {t.type === 'income' ? '+' : '-'}MOP {t.amount.toFixed(2)}
                   </span>
+                  {/* Received toggle for income */}
+                  {t.type === 'income' && isExec && (
+                    <button
+                      onClick={() => toggleReceived(t)}
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${
+                        t.received
+                          ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                          : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
+                      }`}
+                      title={t.received ? '已收到資助' : '標記已收到資助'}
+                    >
+                      {t.received ? <CheckCircle2 className="w-3 h-3" /> : <HandCoins className="w-3 h-3" />}
+                      {t.received ? '已收到' : '未收到'}
+                    </button>
+                  )}
                   {/* Receipt badge */}
                   {t.type === 'expense' && (
                     receipt ? (
