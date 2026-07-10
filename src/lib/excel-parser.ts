@@ -1,9 +1,11 @@
 import * as XLSX from 'xlsx'
 
-const INCOME_KEYWORDS = ['收入', '收', 'income', '入', '團費', '赞助', '贊助', '捐款', '资助', '補助', '会费', '會費', '基金']
-const EXPENSE_KEYWORDS = ['支出', '支', 'expense', '出', '費', '费', '购买', '購買', '支付', '付款', '采购']
+const INCOME_EXPLICIT = ['收入', '收', 'income', '入']
+const INCOME_IMPLICIT = ['團費', '赞助', '贊助', '捐款', '资助', '補助', '会费', '會費', '基金', '獎學金', '奖学金']
+const EXPENSE_EXPLICIT = ['支出', '支', 'expense', '出']
+const EXPENSE_IMPLICIT = ['购买', '購買', '支付', '付款', '采购', '採購', '租金']
 const SUMMARY_KEYWORDS = ['合计', '合計', '總計', '总计', '小计', '小計', 'total', 'sum', '結餘', '结余']
-const CATEGORY_KEYWORDS = ['場地', '场地', '交通', '物資', '物资', '餐飲', '餐饮', '獎品', '奖品', '印刷', '團費', '团费', '贊助', '赞助', '住宿', '保險', '保险', '醫藥', '医药']
+const CATEGORY_KEYWORDS = ['場地', '场地', '交通', '物資', '物资', '餐飲', '餐饮', '獎品', '奖品', '印刷', '團費', '团费', '贊助', '赞助', '住宿', '保險', '保险', '醫藥', '医药', '租金', '裝修', '装修']
 
 export function parseExcelTransactions(buffer: Buffer): any[] {
   const workbook = XLSX.read(buffer, { type: 'buffer' })
@@ -38,17 +40,34 @@ export function parseExcelTransactions(buffer: Buffer): any[] {
       if (hasSummaryWord && texts.length <= 1) continue
       if (nums.length === 0) continue
 
-      const positiveNums = nums.filter(n => n > 0)
-      const amounts = positiveNums.length > 0 ? positiveNums : nums.map(n => Math.abs(n))
-      const amount = amounts.reduce((a, b) => a > b ? a : b)
+      // Step 3: Find amount — skip sequence numbers (1-3) and year-like numbers (2000-2099)
+      const candidates = nums
+        .filter(n => n > 3 || nums.length === 1)           // Don't skip if it's the only number
+        .filter(n => n < 1900 || n > 2100 || nums.length === 1) // Don't skip year if it's the only number
+      const amount = Math.abs(candidates.length > 0 ? candidates.reduce((a, b) => Math.abs(a) > Math.abs(b) ? a : b) : nums.reduce((a, b) => Math.abs(a) > Math.abs(b) ? a : b))
 
+      // Step 4: Type detection — explicit > implicit > character-based
       const allText = texts.join(' ')
-      const hasIncomeWord = INCOME_KEYWORDS.some(k => allText.includes(k))
-      const hasExpenseWord = EXPENSE_KEYWORDS.some(k => allText.includes(k))
+      const hasIncomeExplicit = INCOME_EXPLICIT.some(k => allText.includes(k))
+      const hasExpenseExplicit = EXPENSE_EXPLICIT.some(k => allText.includes(k))
+      const hasIncomeImplicit = INCOME_IMPLICIT.some(k => allText.includes(k))
+      const hasExpenseImplicit = EXPENSE_IMPLICIT.some(k => allText.includes(k))
 
       let type: 'income' | 'expense' = 'expense'
-      if (hasIncomeWord && !hasExpenseWord) type = 'income'
-      else if (hasExpenseWord && !hasIncomeWord) type = 'expense'
+      if (hasIncomeExplicit) {
+        type = 'income'
+      } else if (hasExpenseExplicit) {
+        type = 'expense'
+      } else if (hasIncomeImplicit && !hasExpenseImplicit) {
+        type = 'income'
+      } else if (hasExpenseImplicit) {
+        type = 'expense'
+      } else {
+        // Fallback: check short text for character hints
+        const shortTexts = texts.filter(t => t.length <= 6).join('')
+        if (shortTexts.includes('收') || shortTexts.includes('入') || shortTexts.includes('捐')) type = 'income'
+        else if (shortTexts.includes('費') || shortTexts.includes('费') || shortTexts.includes('支')) type = 'expense'
+      }
 
       let category = ''
       for (const t of texts) {
