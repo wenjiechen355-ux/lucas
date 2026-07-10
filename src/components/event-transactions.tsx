@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Wallet, Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, FileSpreadsheet, Check } from 'lucide-react'
+import { Wallet, Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Loader2, FileSpreadsheet, Check, ReceiptText, Paperclip, Upload } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -28,7 +28,12 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
   const [excelPreview, setExcelPreview] = useState<any[] | null>(null)
   const [parsing, setParsing] = useState(false)
 
-  useEffect(() => { loadTxns() }, [])
+  // Receipts
+  const [receipts, setReceipts] = useState<Record<string, { id: string; file_name: string; file_path: string }>>({})
+  const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null)
+  const [showBatchReceipts, setShowBatchReceipts] = useState(false)
+
+  useEffect(() => { loadTxns(); loadReceipts() }, [])
 
   async function loadTxns() {
     setLoading(true)
@@ -106,6 +111,45 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
     loadTxns()
   }
 
+  async function loadReceipts() {
+    const { data } = await supabase
+      .from('event_receipts')
+      .select('id, transaction_id, file_name, file_path')
+      .eq('event_id', eventId)
+    if (data) {
+      const map: Record<string, any> = {}
+      data.forEach(r => { map[r.transaction_id] = r })
+      setReceipts(map)
+    }
+  }
+
+  async function handleReceiptUpload(txnId: string, file: File) {
+    setUploadingReceipt(txnId)
+    const fd = new FormData()
+    fd.append('transaction_id', txnId)
+    fd.append('event_id', eventId)
+    fd.append('file', file)
+    const res = await fetch('/api/events/upload-receipt', { method: 'POST', body: fd })
+    if (res.ok) {
+      loadReceipts()
+    } else {
+      const data = await res.json()
+      alert(data.error || '上載失敗')
+    }
+    setUploadingReceipt(null)
+  }
+
+  // Bulk receipt upload: suggest best match
+  function autoMatch(category: string): string | null {
+    // Find an unmatched transaction with the same category
+    const match = txns.find(t =>
+      t.category === category && !receipts[t.id] && t.type === 'expense'
+    )
+    return match?.id || null
+  }
+
+  const unreceiptedExpenses = txns.filter(t => t.type === 'expense' && !receipts[t.id])
+
   const totalIncome = txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const totalExpense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const balance = totalIncome - totalExpense
@@ -124,6 +168,52 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
           </button>
         )}
       </div>
+
+      {/* Bulk receipt upload */}
+      {isExec && unreceiptedExpenses.length > 0 && (
+        <div className="mb-3">
+          {!showBatchReceipts ? (
+            <button onClick={() => setShowBatchReceipts(true)}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-purple-600 transition-colors">
+              <ReceiptText className="w-3.5 h-3.5" /> 上載單據（{unreceiptedExpenses.length} 筆支出未有單據）
+            </button>
+          ) : (
+            <div className="p-3 bg-purple-50/50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                  <ReceiptText className="w-3.5 h-3.5" /> 上載單據 — 自動匹配
+                </span>
+                <button onClick={() => setShowBatchReceipts(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600">取消</button>
+              </div>
+              <p className="text-xs text-gray-500">選擇單據圖片/PDF，系統自動匹配對應支出項目</p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {unreceiptedExpenses.map(t => (
+                  <div key={t.id} className="flex items-center justify-between bg-white dark:bg-slate-800 rounded px-2 py-1.5">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-red-600 font-medium">-MOP {t.amount.toFixed(2)}</span>
+                      <span className="text-gray-600 dark:text-gray-400">{t.category}</span>
+                      {t.description && <span className="text-gray-400 truncate max-w-[100px]">{t.description}</span>}
+                    </div>
+                    <label className={`cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                      uploadingReceipt === t.id ? 'bg-gray-100 text-gray-400' : 'bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400'
+                    }`}>
+                      {uploadingReceipt === t.id ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> 上載中</>
+                      ) : (
+                        <><Upload className="w-3 h-3" /> 上載</>
+                      )}
+                      <input type="file" accept=".jpg,.jpeg,.png,.pdf,.webp" className="hidden"
+                        disabled={uploadingReceipt === t.id}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleReceiptUpload(t.id, f) }} />
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Excel upload for exec */}
       {isExec && !showAdd && (
@@ -235,7 +325,9 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
         </div>
       ) : (
         <div className="space-y-1.5">
-          {txns.map(t => (
+          {txns.map(t => {
+            const receipt = receipts[t.id]
+            return (
             <div key={t.id} className="glass-card rounded-lg p-3 flex items-center gap-3">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${t.type === 'income' ? 'bg-green-50 dark:bg-green-900/20 text-green-600' : 'bg-red-50 dark:bg-red-900/20 text-red-600'}`}>
                 {t.type === 'income' ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
@@ -246,6 +338,23 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
                   <span className={`text-sm font-semibold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                     {t.type === 'income' ? '+' : '-'}MOP {t.amount.toFixed(2)}
                   </span>
+                  {/* Receipt badge */}
+                  {t.type === 'expense' && (
+                    receipt ? (
+                      <a href={supabase.storage.from('documents').getPublicUrl(receipt.file_path).data.publicUrl}
+                        target="_blank" title={receipt.file_name}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                        <Paperclip className="w-3 h-3" /> 單據
+                      </a>
+                    ) : isExec ? (
+                      <label className="cursor-pointer flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-slate-700 text-gray-400 hover:text-purple-600">
+                        <Upload className="w-3 h-3" /> 單據
+                        <input type="file" accept=".jpg,.jpeg,.png,.pdf,.webp" className="hidden"
+                          disabled={uploadingReceipt === t.id}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleReceiptUpload(t.id, f) }} />
+                      </label>
+                    ) : null
+                  )}
                 </div>
                 {t.description && <p className="text-xs text-gray-500 truncate">{t.description}</p>}
                 <p className="text-xs text-gray-400">{new Date(t.created_at).toLocaleDateString('zh-HK')}</p>
@@ -256,7 +365,8 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
                 </button>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
