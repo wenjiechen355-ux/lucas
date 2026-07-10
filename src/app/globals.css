@@ -232,15 +232,21 @@ aside a[class*="rounded-lg"][class*="bg-green-50"] {
     0 2px 8px rgba(22,163,74,.06);
 }
 
-/* KPI cards on dashboard main */
-main .grid > .glass-card {
-  transition: all .4s cubic-bezier(.23,1,.32,1);
-}
-main .grid > .glass-card:hover {
-  transform: translateY(-4px) rotateX(2deg);
+/* Stronger 3D visual effects — stat cards */
+main .grid [class*="glass-card"]:hover,
+main .grid [class*="bg-white"]:hover {
+  transform: translateY(-6px) scale(1.03);
   box-shadow:
-    0 8px 32px rgba(22,163,74,.1),
-    0 16px 48px rgba(0,0,0,.08);
+    0 12px 40px rgba(22,163,74,.15),
+    0 20px 60px rgba(0,0,0,.1),
+    inset 0 1px 0 rgba(255,255,255,.8);
+}
+.dark main .grid [class*="glass-card"]:hover,
+.dark main .grid [class*="bg-white"]:hover {
+  transform: translateY(-6px) scale(1.03);
+  box-shadow:
+    0 12px 40px rgba(34,197,94,.15),
+    0 20px 60px rgba(0,0,0,.3);
 }
 
 /* Quick links */

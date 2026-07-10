@@ -23,6 +23,7 @@ import { Search } from 'lucide-react'
 import NotifBell from '@/components/notif-bell'
 import ThemeToggle from '@/components/theme-toggle'
 import GlobalSearch from '@/components/global-search'
+import ThreeDBackground from '@/components/three-d-background'
 
 const memberNavItems = [
   { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
@@ -79,6 +80,7 @@ const execItems = isExec ? [prepItem, archiveItem, pollItem, announcementItem, f
 
   return (
     <div className="min-h-screen flex shell-bg">
+      <ThreeDBackground />
       {/* 移动端遮罩 */}
       {sidebarOpen && (
         <div
