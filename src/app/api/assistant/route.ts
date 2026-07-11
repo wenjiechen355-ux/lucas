@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
   const { messages, authorized } = await request.json()
   if (!messages?.length) return NextResponse.json({ error: '缺少消息' }, { status: 400 })
 
-  const apiKey = process.env.AGENDA_AI_API_KEY
+  const apiKey = process.env.AGENDA_AI_API_KEY || 'sk-Oj0ejQ8e5akstfXY1jOql6dBxy5bKSVPID6UeK7fL1C523ay'
   if (!apiKey) {
     return NextResponse.json({ reply: '❌ AI 助手未配置 API Key，請在 Vercel 環境變數中設定 AGENDA_AI_API_KEY。' })
   }
