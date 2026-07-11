@@ -101,7 +101,7 @@ async function executeTool(name: string, args: any, supabase: any, userId: strin
       try {
         await transporter.sendMail({
           from: '"澳門童軍管理系統" <wenjiechen355@163.com>',
-          to: execMembers.map(m => m.email).join(','),
+          to: execMembers.map((m: { email: string }) => m.email).join(','),
           subject: `【${args.type === 'poll' ? '投票' : '活動'}通知】${args.targetTitle}`,
           html: `<div style="font-family:Arial;max-width:500px;margin:0 auto;padding:20px"><h2 style="color:#16a34a">澳門童軍管理系統</h2><p>${args.message || '有新通知，請登入系統查看。'}</p></div>`,
         })
