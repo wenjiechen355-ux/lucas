@@ -39,17 +39,26 @@ const leaderNavItems = [
   { label: '活動日曆', href: '/dashboard/calendar', icon: CalendarDays },
   { label: '成員管理', href: '/dashboard/leader/members', icon: Users },
   { label: '出席管理', href: '/dashboard/leader/attendance', icon: ClipboardCheck },
+  { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet },
+  { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 },
   { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
   { label: '文檔審批', href: '/dashboard/leader/documents', icon: FileText },
 ]
 
-const createEventItem = { label: '創建活動', href: '/dashboard/leader/attendance/new', icon: Calendar }
-const viewAttendanceItem = { label: '出席情況', href: '/dashboard/leader/attendance', icon: Eye }
+const execNavItems = [
+  { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
+  { label: '活動日曆', href: '/dashboard/calendar', icon: CalendarDays },
+  { label: '活動籌備', href: '/dashboard/leader/event-prep', icon: ClipboardList },
+  { label: '資料庫', href: '/dashboard/leader/event-archive', icon: Database },
+  { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote },
+  { label: '公告管理', href: '/dashboard/leader/announcements', icon: Megaphone },
+  { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet },
+  { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 },
+  { label: '創建活動', href: '/dashboard/leader/attendance/new', icon: Calendar },
+  { label: '出席情況', href: '/dashboard/leader/attendance', icon: Eye },
+]
+
 const approvalItem = { label: '審批項目', href: '/dashboard/leader/approvals', icon: CheckSquare }
-const prepItem = { label: '活動籌備', href: '/dashboard/leader/event-prep', icon: ClipboardList }
-const archiveItem = { label: '資料庫', href: '/dashboard/leader/event-archive', icon: Database }
-const pollItem = { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote }
-const announcementItem = { label: '公告管理', href: '/dashboard/leader/announcements', icon: Megaphone }
 
 export default function DashboardShell({
   profile,
@@ -66,11 +75,16 @@ export default function DashboardShell({
   const isLeader = profile.role === 'leader'
   const isExec = !!profile.position // 所有有職位嘅執委會成員
   const isChair = profile.position === '主席' || profile.position === '副主席'
-  const analyticsItem = { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 }
-const financeItem = { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet }
-const execItems = isExec ? [prepItem, archiveItem, pollItem, announcementItem, financeItem, analyticsItem, createEventItem, viewAttendanceItem] : []
-  const chairItems = isChair ? [approvalItem] : []
-  const navItems = [...(isLeader ? leaderNavItems : memberNavItems), ...execItems, ...chairItems]
+
+  let navItems: { label: string; href: string; icon: any }[] = []
+  if (isLeader) {
+    navItems = [...leaderNavItems]
+  } else if (isExec) {
+    navItems = [...execNavItems]
+  } else {
+    navItems = [...memberNavItems]
+  }
+  if (isChair) navItems.push(approvalItem)
 
   async function handleLogout() {
     await supabase.auth.signOut()
