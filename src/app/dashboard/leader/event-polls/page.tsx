@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange, Mail } from 'lucide-react'
+import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange, Mail, ChevronDown, ChevronUp } from 'lucide-react'
 import MonthCalendar from '@/components/month-calendar'
 import MemberReminder, { type MemberStatus } from '@/components/member-reminder'
 
@@ -329,6 +329,19 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
   const myVote = votes.find((v: any) => v.member_id === profile?.id)
   const mySelections: any[] = myVote?.selections || []
   const isOpen = poll.status === 'open'
+  const [showDetail, setShowDetail] = useState(false)
+  const [editingFieldIdx, setEditingFieldIdx] = useState<number | null>(null)
+  const [editStart, setEditStart] = useState('')
+  const [editEnd, setEditEnd] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  // Build a name map from allProfiles
+  const nameMap: Record<string, string> = {}
+  if (allProfiles) {
+    for (const p of allProfiles) {
+      nameMap[p.id] = p.full_name || '未知'
+    }
+  }
 
   function toggleOption(fieldIdx: number, optionIdx: number) {
     if (!isOpen) return
@@ -369,6 +382,19 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
       newSelections.push({ field_idx: fieldIdx, option_indices: [], calendar_dates: [date] })
     }
     onVote(newSelections)
+  }
+
+  async function handleSaveDateRange(fi: number) {
+    if (!editStart || !editEnd) return
+    setSavingEdit(true)
+    const supabase = createClient()
+    const newFields = JSON.parse(JSON.stringify(fields))
+    newFields[fi].date_range = { start: editStart, end: editEnd }
+    await supabase.from('event_polls').update({ fields: newFields }).eq('id', poll.id)
+    setEditingFieldIdx(null)
+    setSavingEdit(false)
+    // Reload by triggering parent
+    if (typeof window !== 'undefined') window.location.reload()
   }
 
   return (
@@ -455,6 +481,41 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                       {calDates.length > 0 && <span className="ml-2 text-green-600">（已揀 {calDates.length} 日）</span>}
                     </p>
                   )}
+                  {/* Date range edit mode */}
+                  {isExec && isOpen && (
+                    <div className="mb-2">
+                      {editingFieldIdx === fi ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <input type="date" value={editStart}
+                            onChange={e => setEditStart(e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                          <span className="text-xs text-gray-400">至</span>
+                          <input type="date" value={editEnd}
+                            onChange={e => setEditEnd(e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                          <button onClick={() => handleSaveDateRange(fi)}
+                            disabled={savingEdit || !editStart || !editEnd}
+                            className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50">
+                            {savingEdit ? '儲存中...' : '儲存'}
+                          </button>
+                          <button onClick={() => setEditingFieldIdx(null)}
+                            className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700">
+                            取消
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingFieldIdx(fi)
+                            setEditStart(dateRange.start || '')
+                            setEditEnd(dateRange.end || '')
+                          }}
+                          className="text-xs text-amber-600 hover:text-amber-700 underline">
+                          ✏️ 修改日期範圍
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <MonthCalendar
                     selectedDates={calDates}
                     onToggleDate={(date: string) => toggleCalendarDate(fi, date)}
@@ -533,6 +594,74 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
           )
         })}
       </div>
+
+      {/* Voting Details — collapsible */}
+      {totalVoters > 0 && (
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <button
+            onClick={() => setShowDetail(!showDetail)}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+          >
+            {showDetail ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            投票詳情（{totalVoters} 人）
+          </button>
+
+          {showDetail && (
+            <div className="mt-3 space-y-3">
+              {fields.map((field: any, fi: number) => {
+                const isFreeDate = field.type === 'free_date'
+                const fieldVotes = votes.filter((v: any) =>
+                  v.selections?.some((s: any) => s.field_idx === fi)
+                )
+
+                if (fieldVotes.length === 0) return null
+
+                return (
+                  <div key={fi} className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs font-medium text-gray-600 mb-2">
+                      {field.label}
+                      {isFreeDate ? '（揀咗嘅日期）' : ''}
+                    </p>
+                    <div className="space-y-1.5">
+                      {fieldVotes.map((v: any) => {
+                        const sel = v.selections?.find((s: any) => s.field_idx === fi)
+                        const name = nameMap[v.member_id] || '未知'
+
+                        if (isFreeDate) {
+                          const dates = (sel?.calendar_dates || []) as string[]
+                          if (dates.length === 0) return null
+                          return (
+                            <div key={v.id} className="flex items-baseline gap-2 text-xs">
+                              <span className="text-gray-700 font-medium min-w-[60px]">{name}</span>
+                              <span className="text-green-600">
+                                {dates.map((d: string) => {
+                                  const parts = d.split('-')
+                                  return parts.length === 3 ? `${parseInt(parts[1])}/${parseInt(parts[2])}` : d
+                                }).join('、')}
+                              </span>
+                            </div>
+                          )
+                        }
+
+                        // Regular fields — show option labels
+                        const indices = sel?.option_indices || []
+                        if (indices.length === 0) return null
+                        const labels = indices.map((oi: number) => field.options?.[oi]?.label || `#${oi+1}`)
+                        return (
+                          <div key={v.id} className="flex items-baseline gap-2 text-xs">
+                            <span className="text-gray-700 font-medium min-w-[60px]">{name}</span>
+                            <span className="text-blue-600">{labels.join('、')}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
