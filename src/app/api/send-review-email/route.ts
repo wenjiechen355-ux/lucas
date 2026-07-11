@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import * as nodemailer from 'nodemailer'
+import { sendEmail } from '@/lib/email'
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
@@ -30,33 +30,22 @@ export async function POST(request: NextRequest) {
   }
   const typeLabel = typeLabels[type] || '審批'
 
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.163.com',
-    port: 465,
-    secure: true,
-    auth: { user: 'wenjiechen355@163.com', pass: 'VMp2hmkjuArFwcAn' },
-  })
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;border:1px solid #e0e0e0;border-radius:12px">
+      <h2 style="color:#16a34a">澳門童軍管理系統</h2>
+      <p>👋 ${reviewer.full_name}，你好！</p>
+      <p>${submitterName || '有成員'} 提交咗一份 <b>${typeLabel}</b>，需要你審核：</p>
+      <div style="background:#f0fdf4;padding:12px;border-radius:8px;margin:12px 0">
+        <b>${title}</b>
+      </div>
+      ${link ? `<a href="${link}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:8px">前往審核</a>` : ''}
+      <p style="color:#888;font-size:12px;margin-top:16px">此郵件由系統自動發送，請勿回覆。</p>
+    </div>
+  `
 
-  try {
-    await transporter.sendMail({
-      from: '"澳門童軍管理系統" <wenjiechen355@163.com>',
-      to: reviewer.email,
-      subject: `【${typeLabel}】${title}`,
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;border:1px solid #e0e0e0;border-radius:12px">
-          <h2 style="color:#16a34a">澳門童軍管理系統</h2>
-          <p>👋 ${reviewer.full_name}，你好！</p>
-          <p>${submitterName || '有成員'} 提交咗一份 <b>${typeLabel}</b>，需要你審核：</p>
-          <div style="background:#f0fdf4;padding:12px;border-radius:8px;margin:12px 0">
-            <b>${title}</b>
-          </div>
-          ${link ? `<a href="${link}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:8px">前往審核</a>` : ''}
-          <p style="color:#888;font-size:12px;margin-top:16px">此郵件由系統自動發送，請勿回覆。</p>
-        </div>
-      `,
-    })
+  const result = await sendEmail({ to: reviewer.email, subject: `【${typeLabel}】${title}`, html })
+  if (result.success) {
     return NextResponse.json({ success: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
   }
+  return NextResponse.json({ error: result.error }, { status: 500 })
 }

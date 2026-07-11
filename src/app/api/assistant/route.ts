@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import * as nodemailer from 'nodemailer'
+import { sendEmail } from '@/lib/email'
 
 // ── Tool definitions for AI function calling ──
 const TOOLS = [
@@ -94,21 +94,12 @@ async function executeTool(name: string, args: any, supabase: any, userId: strin
       const { data: execMembers } = await supabase
         .from('profiles').select('email').not('position', 'is', null).not('email', 'is', null)
       if (!execMembers?.length) return { success: false, error: '找不到执委成员' }
-      const transporter = nodemailer.createTransport({
-        host: 'smtp.163.com', port: 465, secure: true,
-        auth: { user: 'wenjiechen355@163.com', pass: 'VMp2hmkjuArFwcAn' },
-      })
-      try {
-        await transporter.sendMail({
-          from: '"澳門童軍管理系統" <wenjiechen355@163.com>',
-          to: execMembers.map((m: { email: string }) => m.email).join(','),
-          subject: `【${args.type === 'poll' ? '投票' : '活動'}通知】${args.targetTitle}`,
-          html: `<div style="font-family:Arial;max-width:500px;margin:0 auto;padding:20px"><h2 style="color:#16a34a">澳門童軍管理系統</h2><p>${args.message || '有新通知，請登入系統查看。'}</p></div>`,
-        })
-        return { success: true, message: `已通知 ${execMembers.length} 位执委成员` }
-      } catch (e: any) {
-        return { success: false, error: e.message }
-      }
+      const html = `<div style="font-family:Arial;max-width:500px;margin:0 auto;padding:20px"><h2 style="color:#16a34a">澳門童軍管理系統</h2><p>${args.message || '有新通知，請登入系統查看。'}</p></div>`
+      const subject = `【${args.type === 'poll' ? '投票' : '活動'}通知】${args.targetTitle}`
+      let sent = 0
+      const results = await Promise.allSettled(execMembers.map((m: { email: string }) => sendEmail({ to: m.email, subject, html })))
+      for (const r of results) { if (r.status === 'fulfilled' && r.value.success) sent++ }
+      return { success: true, message: `已通知 ${sent}/${execMembers.length} 位执委成员` }
     }
 
     case 'query_count': {
