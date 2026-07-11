@@ -287,7 +287,7 @@ export default function EventPollsPage() {
           <div className="space-y-4">
             {openPolls.map(poll => (
               <PollCardV2 key={poll.id} poll={poll} profile={profile} isExec={isExec}
-                allProfiles={allProfiles}
+                allProfiles={allProfiles} readOnly={true}
                 onVote={(sels: any) => handleVote(poll.id, sels)}
                 onClose={() => handleClosePoll(poll.id)}
                 onDelete={() => handleDeletePoll(poll.id)}
@@ -306,7 +306,7 @@ export default function EventPollsPage() {
           <div className="space-y-4">
             {closedPolls.map(poll => (
               <PollCardV2 key={poll.id} poll={poll} profile={profile} isExec={isExec}
-                allProfiles={allProfiles}
+                allProfiles={allProfiles} readOnly={true}
                 onVote={() => {}} onClose={() => {}} onDelete={() => handleDeletePoll(poll.id)}
                 onNotify={() => handleNotifyExec(poll)} />
             ))}
@@ -322,7 +322,7 @@ export default function EventPollsPage() {
   )
 }
 
-function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDelete, onNotify }: any) {
+function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDelete, onNotify, readOnly }: any) {
   const fields: any[] = poll.fields || []
   const votes: any[] = poll.event_poll_votes || []
   const totalVoters = votes.length
@@ -343,7 +343,7 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
   }
 
   function toggleOption(fieldIdx: number, optionIdx: number) {
-    if (!isOpen) return
+    if (!isOpen || readOnly) return
     const existing = mySelections.find((s: any) => s.field_idx === fieldIdx)
     const field = fields[fieldIdx]
     const isMultiple = field?.type === 'multiple'
@@ -366,7 +366,7 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
   }
 
   function toggleCalendarDate(fieldIdx: number, date: string) {
-    if (!isOpen) return
+    if (!isOpen || readOnly) return
     let newSelections: any[] = JSON.parse(JSON.stringify(mySelections))
     const existing = newSelections.find((s: any) => s.field_idx === fieldIdx)
 
