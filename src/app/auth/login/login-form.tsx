@@ -31,14 +31,53 @@ export default function LoginForm() {
       const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
 
+      const userId = authData.user?.id
+      if (!userId) {
+        setError('登入失敗，請重試')
+        setLoading(false)
+        return
+      }
+
       // Check role matches the selected entrance
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, position')
-        .eq('id', authData.user?.id)
-        .single()
+        .eq('id', userId)
+        .maybeSingle()
 
-      if (profile) {
+      // If profile doesn't exist, create it from auth data
+      if (!profile) {
+        const meta = authData.user?.user_metadata || {}
+        const newRole = meta.role || 'member'
+        await supabase.from('profiles').insert({
+          id: userId,
+          email: email,
+          full_name: meta.full_name || '',
+          role: newRole,
+        })
+        // Re-fetch
+        const { data: newProfile } = await supabase.from('profiles').select('role, position').eq('id', userId).maybeSingle()
+        if (!newProfile) {
+          setError('無法載入用戶資料')
+          setLoading(false)
+          await supabase.auth.signOut()
+          return
+        }
+        // Simple check for newly created profile (won't have position)
+        if (role === 'member') {
+          setError('❌ 新創建帳號，請先用「普通團員」入口登入')
+          setLoading(false)
+          await supabase.auth.signOut()
+          return
+        }
+        if (role === 'leader' && newProfile.role !== 'leader') {
+          setError('❌ 你唔係領袖，請選擇「普通團員」或「執委會成員」登入')
+          setLoading(false)
+          await supabase.auth.signOut()
+          return
+        }
+        // Continue to dashboard
+      } else {
         const actualIsLeader = profile.role === 'leader'
         const actualIsExec = !!profile.position
         const actualIsRegular = !actualIsLeader && !actualIsExec
