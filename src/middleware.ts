@@ -8,6 +8,7 @@ const LEADER_PAGES = [
   '/dashboard/leader/finance',
   '/dashboard/leader/attendance-analytics',
   '/dashboard/leader/documents',
+  '/dashboard/leader/event-polls',
 ]
 
 const EXEC_PAGES = [
@@ -82,10 +83,10 @@ export async function middleware(request: NextRequest) {
   // Determine which page list to use based on role
   let allowedPages: string[] = []
   if (isLeader) {
-    allowedPages = [...LEADER_PAGES]
+    allowedPages = [...LEADER_PAGES, ...MEMBER_PAGES]
     if (isChair) allowedPages.push(...CHAIR_PAGES)
   } else if (isExec) {
-    allowedPages = [...EXEC_PAGES]
+    allowedPages = [...EXEC_PAGES, ...MEMBER_PAGES]
     if (isChair) allowedPages.push(...CHAIR_PAGES)
   } else {
     allowedPages = [...MEMBER_PAGES]

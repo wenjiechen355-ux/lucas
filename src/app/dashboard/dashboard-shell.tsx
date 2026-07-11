@@ -41,6 +41,7 @@ const leaderNavItems = [
   { label: '出席管理', href: '/dashboard/leader/attendance', icon: ClipboardCheck },
   { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet },
   { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 },
+  { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote },
   { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
   { label: '文檔審批', href: '/dashboard/leader/documents', icon: FileText },
 ]
