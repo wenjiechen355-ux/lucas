@@ -31,8 +31,8 @@ async function analyzeAgenda(text: string): Promise<string | null> {
   const apiKey = process.env.AGENDA_AI_API_KEY
   if (!apiKey) return null
 
-  const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.deepseek.com/chat/completions'
-  const model = process.env.AGENDA_AI_MODEL || 'deepseek-chat'
+  const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.silra.cn/v1/chat/completions'
+  const model = 'deepseek-chat'
 
   const systemPrompt = `你係一個會議議程分析助手。請根據以下議程內容，提取並整理所有關鍵資訊。
 

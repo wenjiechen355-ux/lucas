@@ -170,8 +170,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ reply: '❌ AI 助手未配置 API Key，請在 Vercel 環境變數中設定 AGENDA_AI_API_KEY。' })
   }
 
-  const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.deepseek.com/chat/completions'
-  const model = process.env.AGENDA_AI_MODEL || 'deepseek-chat'
+  const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.silra.cn/v1/chat/completions'
+  const model = 'deepseek-chat'
 
   const systemPrompt = `你係「澳門童軍第一旅執委會」嘅 AI 助手。
 

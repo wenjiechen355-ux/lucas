@@ -37,8 +37,8 @@ export async function aiParseExcel(buffer: Buffer): Promise<{ transactions: any[
   // Build text representation
   const rowTexts = rows.map((r, i) => `Row${i}: ${r.join(' | ')}`).join('\n')
 
-  const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.deepseek.com/chat/completions'
-  const model = process.env.AGENDA_AI_MODEL || 'deepseek-chat'
+  const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.silra.cn/v1/chat/completions'
+  const model = 'deepseek-chat'
 
   const systemPrompt = `你係一個財政數據分析助手。請根據以下 Excel 表格嘅原始數據，逐行分析並提取收支記錄。
 
