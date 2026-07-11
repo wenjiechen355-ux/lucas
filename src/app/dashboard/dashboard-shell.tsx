@@ -23,6 +23,7 @@ import { Search } from 'lucide-react'
 import NotifBell from '@/components/notif-bell'
 import ThemeToggle from '@/components/theme-toggle'
 import GlobalSearch from '@/components/global-search'
+import AIAssistant from '@/components/ai-assistant'
 import ThreeDBackground from '@/components/three-d-background'
 
 const memberNavItems = [
@@ -244,6 +245,8 @@ export default function DashboardShell({
 
       {/* Global search modal */}
       <GlobalSearch />
+      {/* AI Assistant */}
+      <AIAssistant />
     </div>
   )
 }
