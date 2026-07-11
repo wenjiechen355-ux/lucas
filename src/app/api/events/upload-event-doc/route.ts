@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { parseExcelTransactions } from '@/lib/excel-parser'
+import { aiParseExcel } from '@/lib/excel-ai-parser'
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
@@ -54,20 +55,22 @@ export async function POST(request: NextRequest) {
   const { error: updateError } = await supabase.from('events').update(updateData).eq('id', eventId)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
-  // Auto-parse Excel finance report
+  // Auto-parse Excel finance report (AI first, fallback to keyword)
   let parsedCount = 0
   if (docType === 'finance' && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
     try {
       const buffer = Buffer.from(await file.arrayBuffer())
-      const transactions = parseExcelTransactions(buffer).map(t => ({
+      const { transactions } = await aiParseExcel(buffer)
+      const final = transactions.length > 0 ? transactions : parseExcelTransactions(buffer)
+      const withEventId = final.map(t => ({
         ...t,
         event_id: eventId,
         created_by: user.id,
       }))
 
-      if (transactions.length > 0) {
-        await supabase.from('event_transactions').insert(transactions)
-        parsedCount = transactions.length
+      if (withEventId.length > 0) {
+        await supabase.from('event_transactions').insert(withEventId)
+        parsedCount = withEventId.length
       }
     } catch {
       // Silently ignore parse errors — file still uploaded successfully

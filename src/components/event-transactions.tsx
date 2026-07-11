@@ -37,6 +37,7 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
   const [showExcelUpload, setShowExcelUpload] = useState(false)
   const [excelPreview, setExcelPreview] = useState<any[] | null>(null)
   const [parsing, setParsing] = useState(false)
+  const [usedAI, setUsedAI] = useState(false)
 
   // Receipts
   const [receipts, setReceipts] = useState<Record<string, { id: string; file_name: string; file_path: string }>>({})
@@ -87,6 +88,7 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
     const data = await res.json()
     if (data.transactions?.length) {
       setExcelPreview(data.transactions)
+      setUsedAI(data.usedAI || false)
     } else {
       alert(data.error || '無法解析 Excel 檔案，請確認格式')
     }
@@ -273,7 +275,9 @@ export default function EventTransactions({ eventId, isExec }: { eventId: string
 
               {excelPreview && excelPreview.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">已識別 {excelPreview.length} 筆記錄：</p>
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    已識別 {excelPreview.length} 筆記錄{usedAI ? <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-purple-100 text-purple-600">🤖 AI 分析</span> : ''}
+                  </p>
                   <div className="max-h-40 overflow-y-auto space-y-1 mb-2">
                     {excelPreview.map((t, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs bg-white dark:bg-slate-800 rounded px-2 py-1">
