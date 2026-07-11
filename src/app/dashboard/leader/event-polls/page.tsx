@@ -460,6 +460,8 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                     onToggleDate={(date: string) => toggleCalendarDate(fi, date)}
                     month={dateRange.start ? new Date(dateRange.start).getMonth() : undefined}
                     year={dateRange.start ? new Date(dateRange.start).getFullYear() : undefined}
+                    minDate={dateRange.start || undefined}
+                    maxDate={dateRange.end || undefined}
                   />
                 </div>
               </div>
