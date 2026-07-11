@@ -17,7 +17,7 @@ import {
   KeyRound,
   User,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays, Wallet, BarChart3 } from 'lucide-react'
 import { Search } from 'lucide-react'
 import NotifBell from '@/components/notif-bell'
@@ -85,6 +85,32 @@ export default function DashboardShell({
     navItems = [...memberNavItems]
   }
   if (isChair) navItems.push(approvalItem)
+
+  // Access control — redirect if user tries to access pages not meant for their role
+  useEffect(() => {
+    const commonPages = ['/dashboard', '/dashboard/profile', '/dashboard/change-password', '/dashboard/notifications']
+    const isCommonPage = commonPages.some(p => pathname === p || pathname.startsWith(p + '/'))
+    if (isCommonPage) return // Everyone can access common pages
+
+    const isLeaderPath = pathname.startsWith('/dashboard/leader')
+
+    if (isLeader) return // Leader can access everything
+
+    if (isExec) {
+      // Exec (not leader) can only access exec-specific leader pages
+      const allowedForExec = execNavItems.some(item => pathname.startsWith(item.href))
+      const allowedForChair = isChair && pathname.startsWith(approvalItem.href)
+      if (!allowedForExec && !allowedForChair) {
+        router.replace('/dashboard')
+      }
+      return
+    }
+
+    // Regular member: cannot access any leader/exec pages
+    if (isLeaderPath) {
+      router.replace('/dashboard')
+    }
+  }, [pathname, isLeader, isExec, isChair])
 
   async function handleLogout() {
     await supabase.auth.signOut()
