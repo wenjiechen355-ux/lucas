@@ -1,8 +1,16 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
-// Exec-allowed leader paths (pages that exec members can access)
-const EXEC_ALLOWED = [
+// Pages accessible by role (each role ONLY sees its own list)
+const LEADER_PAGES = [
+  '/dashboard/leader/members',
+  '/dashboard/leader/attendance',
+  '/dashboard/leader/finance',
+  '/dashboard/leader/attendance-analytics',
+  '/dashboard/leader/documents',
+]
+
+const EXEC_PAGES = [
   '/dashboard/leader/event-prep',
   '/dashboard/leader/event-archive',
   '/dashboard/leader/event-polls',
@@ -10,70 +18,82 @@ const EXEC_ALLOWED = [
   '/dashboard/leader/finance',
   '/dashboard/leader/attendance-analytics',
   '/dashboard/leader/attendance',
+  '/dashboard/leader/attendance/new',
 ]
 
-// Chair-only extra pages
-const CHAIR_ONLY = [
+const MEMBER_PAGES = [
+  '/dashboard/attendance',
+  '/dashboard/progress',
+  '/dashboard/documents',
+  '/dashboard/event-polls',
+]
+
+// Common pages everyone can access
+const COMMON_PAGES = [
+  '/dashboard',        // home
+  '/dashboard/calendar',
+  '/dashboard/profile',
+  '/dashboard/change-password',
+  '/dashboard/notifications',
+]
+
+// Chair bonus
+const CHAIR_PAGES = [
   '/dashboard/leader/approvals',
-  '/dashboard/leader/members',
-  '/dashboard/leader/documents',
 ]
 
 export async function middleware(request: NextRequest) {
   const { supabase, supabaseResponse, user } = await updateSession(request)
-
-  // Only check dashboard pages
   const { pathname } = request.nextUrl
+
   if (!pathname.startsWith('/dashboard')) {
     return supabaseResponse
   }
 
-  // Not logged in → redirect to login
   if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
   }
 
-  // Skip access control for common non-role-specific pages
-  const commonPages = ['/dashboard', '/dashboard/profile', '/dashboard/change-password', '/dashboard/notifications']
-  if (commonPages.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+  // Common pages → allow all authenticated users
+  if (COMMON_PAGES.some(p => pathname === p || pathname.startsWith(p + '/'))) {
     return supabaseResponse
   }
 
-  // Fetch profile to determine role
+  // Fetch profile
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, position')
     .eq('id', user.id)
     .maybeSingle()
 
-  if (!profile) {
-    return supabaseResponse
-  }
+  if (!profile) return supabaseResponse
 
   const isLeader = profile.role === 'leader'
   const isExec = !!profile.position
   const isChair = profile.position === '主席' || profile.position === '副主席'
 
-  // Leader: access everything
-  if (isLeader) return supabaseResponse
-
-  const isLeaderPath = pathname.startsWith('/dashboard/leader')
-
-  if (isExec) {
-    // Exec (not leader): can only access exec-allowed paths
-    const allowed = EXEC_ALLOWED.some(p => pathname === p || pathname.startsWith(p + '/'))
-    const chairAllowed = isChair && CHAIR_ONLY.some(p => pathname === p || pathname.startsWith(p + '/'))
-    if (allowed || chairAllowed) return supabaseResponse
-    // Not allowed → redirect to dashboard
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+  // Chair pages
+  if (CHAIR_PAGES.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+    if (isChair) return supabaseResponse
   }
 
-  // Regular member: cannot access any /dashboard/leader/* pages
-  if (isLeaderPath) {
+  // Determine which page list to use based on role
+  let allowedPages: string[] = []
+  if (isLeader) {
+    allowedPages = [...LEADER_PAGES]
+    if (isChair) allowedPages.push(...CHAIR_PAGES)
+  } else if (isExec) {
+    allowedPages = [...EXEC_PAGES]
+    if (isChair) allowedPages.push(...CHAIR_PAGES)
+  } else {
+    allowedPages = [...MEMBER_PAGES]
+  }
+
+  // Check if current path is allowed
+  const allowed = allowedPages.some(p => pathname === p || pathname.startsWith(p + '/'))
+  if (!allowed) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
