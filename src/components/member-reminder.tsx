@@ -69,9 +69,34 @@ export default function MemberReminder({ targetTitle, link, type, members }: Mem
   }
 
   async function sendSelected() {
-    for (const memberId of selectedIds) {
-      const member = members.find(m => m.memberId === memberId)
-      if (member) await sendReminder(memberId, member.fullName)
+    // Use batch API — one request for all selected members
+    const ids = Array.from(selectedIds)
+    if (ids.length === 1) {
+      // Single member: use individual API
+      const member = members.find(m => m.memberId === ids[0])
+      if (member) {
+        await sendReminder(member.memberId, member.fullName)
+        return
+      }
+    }
+
+    // Multiple members: use batch API
+    try {
+      const res = await fetch('/api/send-member-reminder-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberIds: ids, type, targetTitle, link }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        // Mark all as sent
+        setSent(prev => { const next = new Set(prev); ids.forEach(id => next.add(id)); return next })
+        alert(`✅ 已發送 ${data.sent} 封郵件${data.failed > 0 ? `，${data.failed} 封失敗` : ''}`)
+      } else {
+        alert(`發送失敗: ${data.error}`)
+      }
+    } catch {
+      alert('網絡錯誤')
     }
   }
 
