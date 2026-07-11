@@ -42,6 +42,7 @@ const leaderNavItems = [
   { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet },
   { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 },
   { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote },
+  { label: '活動投票', href: '/dashboard/event-polls', icon: Vote },
   { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
   { label: '文檔審批', href: '/dashboard/leader/documents', icon: FileText },
 ]
@@ -52,6 +53,7 @@ const execNavItems = [
   { label: '活動籌備', href: '/dashboard/leader/event-prep', icon: ClipboardList },
   { label: '資料庫', href: '/dashboard/leader/event-archive', icon: Database },
   { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote },
+  { label: '活動投票', href: '/dashboard/event-polls', icon: Vote },
   { label: '公告管理', href: '/dashboard/leader/announcements', icon: Megaphone },
   { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet },
   { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 },
