@@ -28,8 +28,41 @@ export default function LoginForm() {
     setError('')
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
+
+      // Check role matches the selected entrance
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, position')
+        .eq('id', authData.user?.id)
+        .single()
+
+      if (profile) {
+        const actualIsLeader = profile.role === 'leader'
+        const actualIsExec = !!profile.position
+        const actualIsRegular = !actualIsLeader && !actualIsExec
+
+        if (role === 'leader' && !actualIsLeader) {
+          setError('❌ 你唔係領袖，請選擇「普通團員」或「執委會成員」登入')
+          setLoading(false)
+          await supabase.auth.signOut()
+          return
+        }
+        if (role === 'member' && !actualIsExec) {
+          setError(actualIsLeader ? '❌ 你係領袖，請選擇「領袖登入」登入' : '❌ 你唔係執委會成員，請選擇「普通團員登入」登入')
+          setLoading(false)
+          await supabase.auth.signOut()
+          return
+        }
+        if (role === 'regular' && !actualIsRegular) {
+          setError(actualIsLeader ? '❌ 你係領袖，請選擇「領袖登入」登入' : '❌ 你係執委會成員，請選擇「執委會成員登入」登入')
+          setLoading(false)
+          await supabase.auth.signOut()
+          return
+        }
+      }
+
       if (rememberMe) {
         localStorage.setItem('scout_saved_email', email)
         localStorage.setItem('scout_saved_password', password)
