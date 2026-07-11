@@ -51,6 +51,7 @@ const leaderNavItems = [
 const execNavItems = [
   { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
   { label: '活動日曆', href: '/dashboard/calendar', icon: CalendarDays },
+  { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
   { label: '活動籌備', href: '/dashboard/leader/event-prep', icon: ClipboardList },
   { label: '資料庫', href: '/dashboard/leader/event-archive', icon: Database },
   { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote },
