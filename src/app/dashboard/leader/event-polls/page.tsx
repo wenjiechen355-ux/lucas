@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange, Mail, ChevronDown, ChevronUp } from 'lucide-react'
+import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange, Mail } from 'lucide-react'
 import MonthCalendar from '@/components/month-calendar'
 import MemberReminder, { type MemberStatus } from '@/components/member-reminder'
 
@@ -329,7 +329,6 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
   const myVote = votes.find((v: any) => v.member_id === profile?.id)
   const mySelections: any[] = myVote?.selections || []
   const isOpen = poll.status === 'open'
-  const [showDetail, setShowDetail] = useState(false)
   const [editingFieldIdx, setEditingFieldIdx] = useState<number | null>(null)
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
@@ -523,6 +522,19 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                     year={dateRange.start ? new Date(dateRange.start).getFullYear() : undefined}
                     minDate={dateRange.start || undefined}
                     maxDate={dateRange.end || undefined}
+                    memberAvatars={(() => {
+                      const map: Record<string, string[]> = {}
+                      for (const v of votes) {
+                        const sel = v.selections?.find((s: any) => s.field_idx === fi)
+                        const dates = (sel?.calendar_dates || []) as string[]
+                        const name = nameMap[v.member_id] || '?'
+                        for (const d of dates) {
+                          if (!map[d]) map[d] = []
+                          map[d].push(name)
+                        }
+                      }
+                      return map
+                    })()}
                   />
                 </div>
               </div>
@@ -594,74 +606,6 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
           )
         })}
       </div>
-
-      {/* Voting Details — collapsible */}
-      {totalVoters > 0 && (
-        <div className="mt-4 border-t border-gray-100 pt-3">
-          <button
-            onClick={() => setShowDetail(!showDetail)}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-          >
-            {showDetail ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            投票詳情（{totalVoters} 人）
-          </button>
-
-          {showDetail && (
-            <div className="mt-3 space-y-3">
-              {fields.map((field: any, fi: number) => {
-                const isFreeDate = field.type === 'free_date'
-                const fieldVotes = votes.filter((v: any) =>
-                  v.selections?.some((s: any) => s.field_idx === fi)
-                )
-
-                if (fieldVotes.length === 0) return null
-
-                return (
-                  <div key={fi} className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs font-medium text-gray-600 mb-2">
-                      {field.label}
-                      {isFreeDate ? '（揀咗嘅日期）' : ''}
-                    </p>
-                    <div className="space-y-1.5">
-                      {fieldVotes.map((v: any) => {
-                        const sel = v.selections?.find((s: any) => s.field_idx === fi)
-                        const name = nameMap[v.member_id] || '未知'
-
-                        if (isFreeDate) {
-                          const dates = (sel?.calendar_dates || []) as string[]
-                          if (dates.length === 0) return null
-                          return (
-                            <div key={v.id} className="flex items-baseline gap-2 text-xs">
-                              <span className="text-gray-700 font-medium min-w-[60px]">{name}</span>
-                              <span className="text-green-600">
-                                {dates.map((d: string) => {
-                                  const parts = d.split('-')
-                                  return parts.length === 3 ? `${parseInt(parts[1])}/${parseInt(parts[2])}` : d
-                                }).join('、')}
-                              </span>
-                            </div>
-                          )
-                        }
-
-                        // Regular fields — show option labels
-                        const indices = sel?.option_indices || []
-                        if (indices.length === 0) return null
-                        const labels = indices.map((oi: number) => field.options?.[oi]?.label || `#${oi+1}`)
-                        return (
-                          <div key={v.id} className="flex items-baseline gap-2 text-xs">
-                            <span className="text-gray-700 font-medium min-w-[60px]">{name}</span>
-                            <span className="text-blue-600">{labels.join('、')}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

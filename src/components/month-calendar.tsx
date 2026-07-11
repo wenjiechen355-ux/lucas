@@ -10,12 +10,25 @@ interface MonthCalendarProps {
   year?: number
   minDate?: string  // 'YYYY-MM-DD' — 可选日期范围下限
   maxDate?: string  // 'YYYY-MM-DD' — 可选日期范围上限
+  memberAvatars?: Record<string, string[]> // date -> array of member names (displayed as first-char avatars)
 }
 
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 const DAYS = ['日','一','二','三','四','五','六']
 
-export default function MonthCalendar({ selectedDates, onToggleDate, month: m, year: y, minDate, maxDate }: MonthCalendarProps) {
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-amber-500',
+  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500',
+  'bg-cyan-500', 'bg-orange-500', 'bg-lime-500', 'bg-violet-500',
+]
+
+function getAvatarColor(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+}
+
+export default function MonthCalendar({ selectedDates, onToggleDate, month: m, year: y, minDate, maxDate, memberAvatars }: MonthCalendarProps) {
   const today = new Date()
   const [viewMonth, setViewMonth] = useState(m ?? today.getMonth())
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
@@ -23,6 +36,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+  const hasAvatars = !!memberAvatars
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1) }
@@ -61,22 +75,23 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
       </div>
 
       {/* Day headers */}
-      <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+      <div className="grid grid-cols-7 gap-1 mb-1">
         {DAYS.map(d => (
           <div key={d} className="text-center text-[10px] text-gray-400 py-1">{d}</div>
         ))}
       </div>
 
       {/* Date grid */}
-      <div className="grid grid-cols-7 gap-0.5">
+      <div className={`grid grid-cols-7 gap-1 ${hasAvatars ? '' : 'gap-0.5'}`}>
         {cells.map((d, i) => {
-          if (d === null) return <div key={`e${i}`} className="h-8" />
+          if (d === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
           const ds = dateStr(d)
           const sel = selectedDates.includes(ds)
           const past = isPast(d)
           const outOfRange = isOutOfRange(d)
           const disabled = isDisabled(d)
           const isToday = ds === todayStr
+          const avatars = memberAvatars?.[ds] || []
 
           return (
             <button
@@ -84,7 +99,9 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
               type="button"
               onClick={() => !disabled && onToggleDate(ds)}
               disabled={disabled}
-              className={`h-8 rounded-md text-xs font-medium transition-all ${
+              className={`rounded-md text-xs font-medium transition-all flex flex-col items-center justify-start pt-0.5 ${
+                hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'
+              } ${
                 sel
                   ? 'bg-green-500 text-white shadow-sm'
                   : isToday && !outOfRange
@@ -96,7 +113,24 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
                         : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              {d}
+              <span>{d}</span>
+              {/* Avatar circles */}
+              {hasAvatars && avatars.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-0.5 mt-1 pb-0.5">
+                  {avatars.slice(0, 6).map((name, ai) => (
+                    <span
+                      key={ai}
+                      className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[8px] font-bold text-white ${getAvatarColor(name)}`}
+                      title={name}
+                    >
+                      {name.charAt(0)}
+                    </span>
+                  ))}
+                  {avatars.length > 6 && (
+                    <span className="text-[8px] text-gray-400">+{avatars.length - 6}</span>
+                  )}
+                </div>
+              )}
             </button>
           )
         })}
