@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface MonthCalendarProps {
@@ -28,10 +28,26 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 
+function getDateRange(start: string, end: string): string[] {
+  const dates: string[] = []
+  const s = new Date(start + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  const dir = s <= e ? 1 : -1
+  const cur = new Date(s)
+  while (dir === 1 ? cur <= e : cur >= e) {
+    dates.push(cur.toISOString().slice(0, 10))
+    cur.setDate(cur.getDate() + dir)
+  }
+  return dates
+}
+
 export default function MonthCalendar({ selectedDates, onToggleDate, month: m, year: y, minDate, maxDate, memberAvatars }: MonthCalendarProps) {
   const today = new Date()
   const [viewMonth, setViewMonth] = useState(m ?? today.getMonth())
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
+  const [dragStart, setDragStart] = useState<string | null>(null)
+  const [dragHover, setDragHover] = useState<string | null>(null)
+  const isDragging = useRef(false)
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
@@ -57,12 +73,66 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   }
   const isDisabled = (d: number) => isPast(d) || isOutOfRange(d)
 
+  const handlePointerDown = useCallback((date: string) => {
+    if (isDisabled(parseInt(date.split('-')[2]))) return
+    isDragging.current = true
+    setDragStart(date)
+    setDragHover(date)
+  }, [minDate, maxDate])
+
+  const handlePointerEnter = useCallback((date: string) => {
+    if (!isDragging.current) return
+    setDragHover(date)
+  }, [])
+
+  const handlePointerUp = useCallback(() => {
+    if (!isDragging.current || !dragStart || !dragHover) {
+      isDragging.current = false
+      setDragStart(null)
+      setDragHover(null)
+      return
+    }
+
+    const range = getDateRange(dragStart, dragHover)
+    const startSelected = selectedDates.includes(dragStart)
+
+    // Determine which dates to toggle
+    const toToggle = range.filter(date => {
+      const day = parseInt(date.split('-')[2])
+      return !isDisabled(day) && !isPast(day) && !isOutOfRange(day)
+    })
+
+    if (startSelected) {
+      // Drag started on selected → deselect all in range
+      toToggle.forEach(date => {
+        if (selectedDates.includes(date)) onToggleDate(date)
+      })
+    } else {
+      // Drag started on unselected → select all in range
+      toToggle.forEach(date => {
+        if (!selectedDates.includes(date)) onToggleDate(date)
+      })
+    }
+
+    isDragging.current = false
+    setDragStart(null)
+    setDragHover(null)
+  }, [dragStart, dragHover, selectedDates, onToggleDate, minDate, maxDate])
+
   const cells: (number | null)[] = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
+  // Compute drag range for visual highlighting
+  const dragRange = dragStart && dragHover ? getDateRange(dragStart, dragHover) : []
+
   return (
-    <div className="select-none">
+    <div
+      className="select-none"
+      onMouseUp={handlePointerUp}
+      onMouseLeave={() => { if (isDragging.current) { isDragging.current = false; setDragStart(null); setDragHover(null) }}}
+      onTouchEnd={handlePointerUp}
+    >
       {/* Month nav */}
       <div className="flex items-center justify-between mb-2">
         <button type="button" onClick={prevMonth} className="p-1 text-gray-400 hover:text-gray-600">
@@ -87,6 +157,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           if (d === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
           const ds = dateStr(d)
           const sel = selectedDates.includes(ds)
+          const inDragRange = isDragging.current && dragStart && dragHover && dragRange.includes(ds)
           const past = isPast(d)
           const outOfRange = isOutOfRange(d)
           const disabled = isDisabled(d)
@@ -97,20 +168,24 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
             <button
               key={ds}
               type="button"
-              onClick={() => !disabled && onToggleDate(ds)}
+              onPointerDown={() => handlePointerDown(ds)}
+              onPointerEnter={() => handlePointerEnter(ds)}
+              onPointerUp={handlePointerUp}
               disabled={disabled}
-              className={`rounded-md text-xs font-medium transition-all flex flex-col items-center justify-start pt-0.5 ${
+              className={`rounded-md text-xs font-medium transition-all flex flex-col items-center justify-start pt-0.5 outline-none ${
                 hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'
               } ${
                 sel
                   ? 'bg-green-500 text-white shadow-sm'
-                  : isToday && !outOfRange
-                    ? 'bg-green-50 text-green-700 ring-1 ring-green-300'
-                    : outOfRange
-                      ? 'text-red-200 cursor-not-allowed bg-red-50/30'
-                      : past
-                        ? 'text-gray-200 cursor-not-allowed'
-                        : 'text-gray-600 hover:bg-gray-100'
+                  : inDragRange
+                    ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                    : isToday && !outOfRange
+                      ? 'bg-green-50 text-green-700 ring-1 ring-green-300'
+                      : outOfRange
+                        ? 'text-red-200 cursor-not-allowed bg-red-50/30'
+                        : past
+                          ? 'text-gray-200 cursor-not-allowed'
+                          : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               <span>{d}</span>
