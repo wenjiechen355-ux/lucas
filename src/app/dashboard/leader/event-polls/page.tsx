@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Vote, Plus, X, CheckCircle, Calendar, MapPin, Clock, Users, Trash2, RefreshCw, Loader2, Check, GripVertical, CalendarDays, CalendarRange, Mail } from 'lucide-react'
@@ -31,6 +31,8 @@ export default function EventPollsPage() {
   const [eventType, setEventType] = useState<EventType>('unit')
   const [isExecMeeting, setIsExecMeeting] = useState(false)
   const [fields, setFields] = useState<Field[]>([{ label: '日期', type: 'multiple', options: [{ label: '' }] }])
+  const [voteStartAt, setVoteStartAt] = useState('')
+  const [voteEndAt, setVoteEndAt] = useState('')
   const [creating, setCreating] = useState(false)
 
   useEffect(() => { loadData() }, [])
@@ -96,9 +98,11 @@ export default function EventPollsPage() {
       event_type: eventType,
       is_exec_meeting: eventType === 'unit' ? isExecMeeting : false,
       fields: fields, created_by: profile?.id,
+      vote_start_at: voteStartAt ? new Date(voteStartAt).toISOString() : null,
+      vote_end_at: voteEndAt ? new Date(voteEndAt).toISOString() : null,
     })
     if (error) alert(error.message)
-    else { setShowCreate(false); setPollTitle(''); setPollDesc(''); setEventType('unit'); setIsExecMeeting(false); setFields([{ label: '日期', type: 'multiple', options: [{ label: '' }] }]); loadData() }
+    else { setShowCreate(false); setPollTitle(''); setPollDesc(''); setEventType('unit'); setIsExecMeeting(false); setVoteStartAt(''); setVoteEndAt(''); setFields([{ label: '日期', type: 'multiple', options: [{ label: '' }] }]); loadData() }
     setCreating(false)
   }
 
@@ -194,6 +198,26 @@ export default function EventPollsPage() {
             </div>
           )}
 
+          {/* Voting time window */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">投票時間範圍（可選）</label>
+            <p className="text-xs text-gray-400 mb-2">設定後，成員只能在此時間段內投票。留空代表不限。</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500">開始時間</label>
+                <input type="datetime-local" value={voteStartAt}
+                  onChange={e => setVoteStartAt(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">截止時間</label>
+                <input type="datetime-local" value={voteEndAt}
+                  onChange={e => setVoteEndAt(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+              </div>
+            </div>
+          </div>
+
           {/* Fields */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -287,7 +311,7 @@ export default function EventPollsPage() {
           <div className="space-y-4">
             {openPolls.map(poll => (
               <PollCardV2 key={poll.id} poll={poll} profile={profile} isExec={isExec}
-                allProfiles={allProfiles} readOnly={true}
+                allProfiles={allProfiles} readOnly={false}
                 onVote={(sels: any) => handleVote(poll.id, sels)}
                 onClose={() => handleClosePoll(poll.id)}
                 onDelete={() => handleDeletePoll(poll.id)}
@@ -327,12 +351,67 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
   const votes: any[] = poll.event_poll_votes || []
   const totalVoters = votes.length
   const myVote = votes.find((v: any) => v.member_id === profile?.id)
-  const mySelections: any[] = myVote?.selections || []
+  const dbSelections: any[] = myVote?.selections || []
   const isOpen = poll.status === 'open'
   const [editingFieldIdx, setEditingFieldIdx] = useState<number | null>(null)
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
+  const [dragField, setDragField] = useState<number | null>(null)
+  const isPressingRef = useRef(false)
+  const dragToggledRef = useRef<Set<number>>(new Set())
+
+  // ── 樂觀更新：localSelections 為 null 時用 DB 數據，不為 null 時用本地數據 ──
+  const [localSelections, setLocalSelections] = useState<any[] | null>(null)
+  const mySelections = localSelections ?? dbSelections
+
+  // DB 數據更新時清除本地覆蓋
+  useEffect(() => {
+    setLocalSelections(null)
+  }, [dbSelections])
+
+  // Global mouseup/touchend cleanup
+  useEffect(() => {
+    function endDrag() {
+      isPressingRef.current = false
+      setDragField(null)
+      dragToggledRef.current = new Set()
+    }
+    window.addEventListener('mouseup', endDrag)
+    window.addEventListener('touchend', endDrag)
+    window.addEventListener('touchcancel', endDrag)
+    return () => {
+      window.removeEventListener('mouseup', endDrag)
+      window.removeEventListener('touchend', endDrag)
+      window.removeEventListener('touchcancel', endDrag)
+    }
+  }, [])
+
+  // Voting time window checks
+  const now = new Date()
+  const voteStartAt = poll.vote_start_at ? new Date(poll.vote_start_at) : null
+  const voteEndAt = poll.vote_end_at ? new Date(poll.vote_end_at) : null
+  const voteNotStarted = voteStartAt && now < voteStartAt
+  const voteEnded = voteEndAt && now > voteEndAt
+  const canVote = isOpen && !voteNotStarted && !voteEnded && !readOnly
+
+  function getVotingStatusBadge() {
+    if (!isOpen) return { text: '已結束', cls: 'bg-gray-100 text-gray-500' }
+    if (voteNotStarted) return { text: '未開始', cls: 'bg-yellow-50 text-yellow-600' }
+    if (voteEnded) return { text: '已截止', cls: 'bg-red-50 text-red-600' }
+    return { text: '投票中', cls: 'bg-green-50 text-green-600' }
+  }
+
+  const statusBadge = getVotingStatusBadge()
+
+  // Format datetime for display
+  function fmtDT(dt: Date | null): string {
+    if (!dt) return ''
+    const m = dt.getMonth() + 1; const d = dt.getDate()
+    const h = dt.getHours().toString().padStart(2, '0')
+    const min = dt.getMinutes().toString().padStart(2, '0')
+    return `${m}/${d} ${h}:${min}`
+  }
 
   // Build a name map from allProfiles
   const nameMap: Record<string, string> = {}
@@ -343,7 +422,7 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
   }
 
   function toggleOption(fieldIdx: number, optionIdx: number) {
-    if (!isOpen || readOnly) return
+    if (!canVote) return
     const existing = mySelections.find((s: any) => s.field_idx === fieldIdx)
     const field = fields[fieldIdx]
     const isMultiple = field?.type === 'multiple'
@@ -362,11 +441,13 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
     } else {
       newSelections.push({ field_idx: fieldIdx, option_indices: [optionIdx], calendar_dates: [] })
     }
+    // 樂觀更新：本地立即生效 + 異步持久化
+    setLocalSelections(newSelections)
     onVote(newSelections)
   }
 
   function toggleCalendarDate(fieldIdx: number, date: string) {
-    if (!isOpen || readOnly) return
+    if (!canVote) return
     let newSelections: any[] = JSON.parse(JSON.stringify(mySelections))
     const existing = newSelections.find((s: any) => s.field_idx === fieldIdx)
 
@@ -380,6 +461,7 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
     } else {
       newSelections.push({ field_idx: fieldIdx, option_indices: [], calendar_dates: [date] })
     }
+    setLocalSelections(newSelections)
     onVote(newSelections)
   }
 
@@ -409,12 +491,20 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
             }`}>
               {poll.event_type === 'unit' ? '團部' : poll.event_type === 'joint' ? '聯團' : '外出交流'}
             </span>
-            {isOpen ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-600">投票中</span>
+            {isOpen ? <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge.cls}`}>{statusBadge.text}</span>
               : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">已結束</span>}
             {poll.is_exec_meeting && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-600">開會</span>}
           </div>
           {poll.description && <p className="text-sm text-gray-500 mt-1">{poll.description}</p>}
           <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><Users className="w-3 h-3" /> {totalVoters} 人已投票</p>
+          {(voteStartAt || voteEndAt) && (
+            <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {voteStartAt ? fmtDT(voteStartAt) : '即時'} ～ {voteEndAt ? fmtDT(voteEndAt) : '不限'}
+              {voteNotStarted && <span className="text-yellow-500 ml-1">⏳ 尚未開放投票</span>}
+              {voteEnded && <span className="text-red-500 ml-1">🔒 投票已截止</span>}
+            </p>
+          )}
         </div>
         {isExec && (
           <div className="flex items-center gap-1">
@@ -439,7 +529,7 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                 />
               )
             })()}
-            {isOpen && (
+            {isOpen && !voteEnded && (
               <>
                 {poll.is_exec_meeting && onNotify && (
                   <button onClick={onNotify}
@@ -449,6 +539,9 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                 )}
                 <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">結束投票</button>
               </>
+            )}
+            {isOpen && voteEnded && (
+              <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100">結束投票（已過截止時間）</button>
             )}
             <button onClick={onDelete} className="p-1.5 text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
           </div>
@@ -515,6 +608,39 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                       )}
                     </div>
                   )}
+                  {/* Top 3 dates ranking — always visible */}
+                  <div className="mb-3">
+                    <p className="text-xs font-medium text-gray-600 mb-1.5">🏆 最多人投嘅日子</p>
+                    {(() => {
+                      const dateCounts: Record<string, number> = {}
+                      for (const v of votes) {
+                        const sel = v.selections?.find((s: any) => s.field_idx === fi)
+                        const dates = (sel?.calendar_dates || []) as string[]
+                        for (const d of dates) { dateCounts[d] = (dateCounts[d] || 0) + 1 }
+                      }
+                      const sorted = Object.entries(dateCounts).sort((a, b) => b[1] - a[1]).slice(0, 3)
+                      if (sorted.length === 0) return <p className="text-xs text-gray-400 italic">暫無數據 — 等團員投票後顯示</p>
+                      const maxCount = sorted[0][1]
+                      return (
+                        <div className="space-y-1">
+                          {sorted.map(([date, count], idx) => (
+                            <div key={date} className="flex items-center gap-2">
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                idx === 1 ? 'bg-gray-100 text-gray-600' :
+                                'bg-orange-50 text-orange-600'
+                              }`}>{idx + 1}</span>
+                              <span className="text-xs text-gray-700 w-24">{date.slice(5)}</span>
+                              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${Math.round(count / maxCount * 100)}%` }} />
+                              </div>
+                              <span className="text-xs text-gray-500 w-10 text-right">{count} 票</span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
                   <MonthCalendar
                     selectedDates={calDates}
                     onToggleDate={(date: string) => toggleCalendarDate(fi, date)}
@@ -548,7 +674,37 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                 {isMultiple && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">多選</span>}
                 {!isMultiple && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">單選</span>}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div
+                className="flex flex-wrap gap-2"
+                onMouseMove={(e) => {
+                  if (!isPressingRef.current || dragField !== fi) return
+                  const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+                  if (!el) return
+                  const btn = el.closest('[data-oi]') as HTMLElement | null
+                  if (!btn) return
+                  const oi = parseInt(btn.dataset.oi || '', 10)
+                  if (isNaN(oi)) return
+                  if (!dragToggledRef.current.has(oi)) {
+                    dragToggledRef.current.add(oi)
+                    toggleOption(fi, oi)
+                  }
+                }}
+                onTouchMove={(e) => {
+                  if (!isPressingRef.current || dragField !== fi) return
+                  const touch = e.touches[0]
+                  if (!touch) return
+                  const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null
+                  if (!el) return
+                  const btn = el.closest('[data-oi]') as HTMLElement | null
+                  if (!btn) return
+                  const oi = parseInt(btn.dataset.oi || '', 10)
+                  if (isNaN(oi)) return
+                  if (!dragToggledRef.current.has(oi)) {
+                    dragToggledRef.current.add(oi)
+                    toggleOption(fi, oi)
+                  }
+                }}
+              >
                 {field.options.map((opt: any, oi: number) => {
                   const isSelected = myFieldSel?.option_indices?.includes(oi) || false
                   const voteCount = votes.filter((v: any) =>
@@ -557,15 +713,35 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                   const pct = totalVoters > 0 ? Math.round(voteCount / totalVoters * 100) : 0
 
                   return (
-                    <button key={oi} onClick={() => toggleOption(fi, oi)}
-                      disabled={!isOpen}
-                      className={`px-3 py-2 rounded-lg border text-sm transition-all flex items-center gap-2 ${
-                        isSelected ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                      } ${!isOpen ? 'cursor-default opacity-80' : ''}`}
+                    <button key={oi} data-oi={oi}
+                      // ── mousedown: 立即切换绿色+锁定，同时进入拖拽模式 ──
+                      onMouseDown={() => {
+                        if (!canVote) return
+                        isPressingRef.current = true
+                        setDragField(fi)
+                        dragToggledRef.current = new Set([oi])
+                        toggleOption(fi, oi)
+                      }}
+                      // ── touchstart: 移动端等同 ──
+                      onTouchStart={() => {
+                        if (!canVote) return
+                        isPressingRef.current = true
+                        setDragField(fi)
+                        dragToggledRef.current = new Set([oi])
+                        toggleOption(fi, oi)
+                      }}
+                      // ── mouseup / touchend: 仅结束拖拽，绿色永不消退 ──
+                      onClick={(e) => e.preventDefault()}
+                      disabled={!canVote}
+                      className={`px-3 py-2 rounded-lg border text-sm transition-none flex items-center gap-2 select-none touch-none ${
+                        isSelected
+                          ? 'border-green-500 bg-green-500 text-white font-medium'
+                          : 'border-gray-200 bg-gray-100 text-gray-700'
+                      } ${!canVote ? 'cursor-default opacity-60' : 'cursor-pointer'}`}
                     >
-                      {isSelected && <Check className="w-3.5 h-3.5" />}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
                       {opt.label}
-                      <span className={`text-xs ${isSelected ? 'text-green-500' : 'text-gray-400'}`}>({voteCount})</span>
+                      <span className={`text-xs ${isSelected ? 'text-green-100' : 'text-gray-400'}`}>({voteCount})</span>
                     </button>
                   )
                 })}

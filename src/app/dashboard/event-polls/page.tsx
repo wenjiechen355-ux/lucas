@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Vote, Check, Users, RefreshCw, Clock, Calendar, MapPin } from 'lucide-react'
@@ -12,6 +12,27 @@ export default function MemberEventPollsPage() {
   const [polls, setPolls] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [dragFieldIndex, setDragFieldIndex] = useState<number | null>(null)
+  const isPressingRef = useRef(false)
+  const dragToggledRef = useRef<Set<number>>(new Set())
+  const optimisticSelectionsRef = useRef<Record<string, any[]>>({})
+
+  // Global cleanup — reset press flag only, green stays forever
+  useEffect(() => {
+    function endDrag() {
+      isPressingRef.current = false
+      setDragFieldIndex(null)
+      dragToggledRef.current = new Set()
+    }
+    document.addEventListener('mouseup', endDrag)
+    document.addEventListener('touchend', endDrag)
+    document.addEventListener('touchcancel', endDrag)
+    return () => {
+      document.removeEventListener('mouseup', endDrag)
+      document.removeEventListener('touchend', endDrag)
+      document.removeEventListener('touchcancel', endDrag)
+    }
+  }, [])
 
   useEffect(() => { loadData() }, [])
 
@@ -26,6 +47,7 @@ export default function MemberEventPollsPage() {
     const isMemberExec = !!prof?.position
     const filtered = isMemberExec ? (data || []) : (data || []).filter(p => !p.is_exec_meeting)
     setPolls(filtered)
+    optimisticSelectionsRef.current = {} // DB 已更新，清除樂觀覆蓋
     setLoading(false)
   }
 
@@ -41,7 +63,14 @@ export default function MemberEventPollsPage() {
 
   if (loading) return <div className="flex items-center justify-center py-20"><RefreshCw className="w-6 h-6 animate-spin text-gray-400" /></div>
 
-  const openPolls = polls.filter(p => p.status === 'open')
+  const openPolls = polls.filter(p => {
+    if (p.status !== 'open') return false
+    // Check voting time window
+    const now = new Date()
+    if (p.vote_start_at && now < new Date(p.vote_start_at)) return false // not yet started
+    if (p.vote_end_at && now > new Date(p.vote_end_at)) return false // already ended
+    return true
+  })
 
   return (
     <div>
@@ -69,7 +98,23 @@ export default function MemberEventPollsPage() {
             const votes: any[] = poll.event_poll_votes || []
             const totalVoters = votes.length
             const myVote = votes.find((v: any) => v.member_id === profile?.id)
-            const mySelections: any[] = myVote?.selections || []
+            const dbSelections: any[] = myVote?.selections || []
+            // 樂觀更新：用 ref 追蹤最新 selections
+            const mySelections = optimisticSelectionsRef.current[poll.id] || dbSelections
+
+            // Voting time window
+            const now = new Date()
+            const voteStartAt = poll.vote_start_at ? new Date(poll.vote_start_at) : null
+            const voteEndAt = poll.vote_end_at ? new Date(poll.vote_end_at) : null
+            const canVote = !(voteStartAt && now < voteStartAt) && !(voteEndAt && now > voteEndAt)
+
+            function fmtDT(dt: Date | null): string {
+              if (!dt) return ''
+              const m = dt.getMonth() + 1; const d = dt.getDate()
+              const h = dt.getHours().toString().padStart(2, '0')
+              const min = dt.getMinutes().toString().padStart(2, '0')
+              return `${m}/${d} ${h}:${min}`
+            }
 
             return (
               <div key={poll.id} className="bg-white rounded-xl border border-gray-200 p-5">
@@ -86,6 +131,12 @@ export default function MemberEventPollsPage() {
                   </div>
                   {poll.description && <p className="text-sm text-gray-500 mt-1">{poll.description}</p>}
                   <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><Users className="w-3 h-3" /> {totalVoters} 人已投票</p>
+                  {(voteStartAt || voteEndAt) && (
+                    <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      投票時間：{voteStartAt ? fmtDT(voteStartAt) : '即時'} ～ {voteEndAt ? fmtDT(voteEndAt) : '不限'}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -111,6 +162,39 @@ export default function MemberEventPollsPage() {
                                 {calDates.length > 0 && <span className="ml-2 text-green-600">（已揀 {calDates.length} 日）</span>}
                               </p>
                             )}
+                            {/* Top 3 dates ranking — always visible */}
+                            <div className="mb-3">
+                              <p className="text-xs font-medium text-gray-600 mb-1.5">🏆 最多人投嘅日子</p>
+                              {(() => {
+                                const dateCounts: Record<string, number> = {}
+                                for (const v of votes) {
+                                  const sel = v.selections?.find((s: any) => s.field_idx === fi)
+                                  const dates = (sel?.calendar_dates || []) as string[]
+                                  for (const d of dates) { dateCounts[d] = (dateCounts[d] || 0) + 1 }
+                                }
+                                const sorted = Object.entries(dateCounts).sort((a, b) => b[1] - a[1]).slice(0, 3)
+                                if (sorted.length === 0) return <p className="text-xs text-gray-400 italic">暫無數據</p>
+                                const maxCount = sorted[0][1]
+                                return (
+                                  <div className="space-y-1">
+                                    {sorted.map(([date, count], idx) => (
+                                      <div key={date} className="flex items-center gap-2">
+                                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                          idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                          idx === 1 ? 'bg-gray-100 text-gray-600' :
+                                          'bg-orange-50 text-orange-600'
+                                        }`}>{idx + 1}</span>
+                                        <span className="text-xs text-gray-700 w-24">{date.slice(5)}</span>
+                                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                          <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${Math.round(count / maxCount * 100)}%` }} />
+                                        </div>
+                                        <span className="text-xs text-gray-500 w-10 text-right">{count} 票</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              })()}
+                            </div>
                             <MonthCalendar
                               selectedDates={calDates}
                               onToggleDate={(date: string) => toggleCalendarDate(date)}
@@ -125,6 +209,7 @@ export default function MemberEventPollsPage() {
                     }
 
                     function toggleOption(oi: number) {
+                      if (!canVote) return
                       const existing = mySelections.find((s: any) => s.field_idx === fi)
                       let newSelections = JSON.parse(JSON.stringify(mySelections))
                       if (existing) {
@@ -140,10 +225,12 @@ export default function MemberEventPollsPage() {
                       } else {
                         newSelections.push({ field_idx: fi, option_indices: [oi], calendar_dates: [] })
                       }
+                      optimisticSelectionsRef.current[poll.id] = newSelections
                       handleVote(poll.id, newSelections)
                     }
 
                     function toggleCalendarDate(date: string) {
+                      if (!canVote) return
                       let newSelections = JSON.parse(JSON.stringify(mySelections))
                       const existing = newSelections.find((s: any) => s.field_idx === fi)
                       if (existing) {
@@ -154,6 +241,7 @@ export default function MemberEventPollsPage() {
                       } else {
                         newSelections.push({ field_idx: fi, option_indices: [], calendar_dates: [date] })
                       }
+                      optimisticSelectionsRef.current[poll.id] = newSelections
                       handleVote(poll.id, newSelections)
                     }
 
@@ -163,20 +251,69 @@ export default function MemberEventPollsPage() {
                           <span className="text-sm font-medium text-gray-700">{field.label}</span>
                           {isMultiple && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">多選</span>}
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div
+                          className="flex flex-wrap gap-2"
+                          onMouseMove={(e) => {
+                            if (!isPressingRef.current || dragFieldIndex !== fi) return
+                            const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+                            if (!el) return
+                            const btn = el.closest('[data-oi]') as HTMLElement | null
+                            if (!btn) return
+                            const oi = parseInt(btn.dataset.oi || '', 10)
+                            if (isNaN(oi)) return
+                            if (!dragToggledRef.current.has(oi)) {
+                              dragToggledRef.current.add(oi)
+                              toggleOption(oi)
+                            }
+                          }}
+                          onTouchMove={(e) => {
+                            if (!isPressingRef.current || dragFieldIndex !== fi) return
+                            const touch = e.touches[0]
+                            if (!touch) return
+                            const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null
+                            if (!el) return
+                            const btn = el.closest('[data-oi]') as HTMLElement | null
+                            if (!btn) return
+                            const oi = parseInt(btn.dataset.oi || '', 10)
+                            if (isNaN(oi)) return
+                            if (!dragToggledRef.current.has(oi)) {
+                              dragToggledRef.current.add(oi)
+                              toggleOption(oi)
+                            }
+                          }}
+                        >
                           {field.options.map((opt: any, oi: number) => {
                             const isSelected = myFieldSel?.option_indices?.includes(oi) || false
                             const voteCount = votes.filter((v: any) =>
                               v.selections?.find((s: any) => s.field_idx === fi)?.option_indices?.includes(oi)
                             ).length
                             return (
-                              <button key={oi} onClick={() => toggleOption(oi)}
-                                className={`px-3 py-2 rounded-lg border text-sm transition-all flex items-center gap-2 ${
-                                  isSelected ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                                }`}>
-                                {isSelected && <Check className="w-3.5 h-3.5" />}
+                              <button key={oi} data-oi={oi}
+                                // ── mousedown/touchstart: 立即切换绿色+锁定，进入拖拽模式 ──
+                                onMouseDown={() => {
+                                  if (!canVote) return
+                                  isPressingRef.current = true
+                                  setDragFieldIndex(fi)
+                                  dragToggledRef.current = new Set([oi])
+                                  toggleOption(oi)
+                                }}
+                                onTouchStart={() => {
+                                  if (!canVote) return
+                                  isPressingRef.current = true
+                                  setDragFieldIndex(fi)
+                                  dragToggledRef.current = new Set([oi])
+                                  toggleOption(oi)
+                                }}
+                                onClick={(e) => e.preventDefault()}
+                                disabled={!canVote}
+                                className={`px-3 py-2 rounded-lg border text-sm transition-none flex items-center gap-2 select-none touch-none ${
+                                  isSelected
+                                    ? 'border-green-500 bg-green-500 text-white font-medium'
+                                    : 'border-gray-200 bg-gray-100 text-gray-700'
+                                } ${!canVote ? 'cursor-default opacity-60' : 'cursor-pointer'}`}>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
                                 {opt.label}
-                                <span className={`text-xs ${isSelected ? 'text-green-500' : 'text-gray-400'}`}>({voteCount})</span>
+                                <span className={`text-xs ${isSelected ? 'text-green-100' : 'text-gray-400'}`}>({voteCount})</span>
                               </button>
                             )
                           })}
