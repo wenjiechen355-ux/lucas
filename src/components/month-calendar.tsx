@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface MonthCalendarProps {
@@ -35,10 +35,7 @@ function getDateRange(start: string, end: string): string[] {
   const dir = s <= e ? 1 : -1
   const cur = new Date(s)
   while (dir === 1 ? cur <= e : cur >= e) {
-    const y = cur.getFullYear()
-    const m = String(cur.getMonth() + 1).padStart(2, '0')
-    const d = String(cur.getDate()).padStart(2, '0')
-    dates.push(`${y}-${m}-${d}`)
+    dates.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`)
     cur.setDate(cur.getDate() + dir)
   }
   return dates
@@ -46,31 +43,129 @@ function getDateRange(start: string, end: string): string[] {
 
 export default function MonthCalendar({ selectedDates, onToggleDate, month: m, year: y, minDate, maxDate, memberAvatars }: MonthCalendarProps) {
   const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
   const [viewMonth, setViewMonth] = useState(m ?? today.getMonth())
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
   const [dragHoverVisual, setDragHoverVisual] = useState<string | null>(null)
+  const calendarRef = useRef<HTMLDivElement>(null)
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const dragStartRef = useRef<string | null>(null)
-  const dragHoverRef = useRef<string | null>(null)
-  const isDraggingRef = useRef(false)
-  const dragActivatedRef = useRef(false)
-
-  const selectedDatesRef = useRef(selectedDates)
-  selectedDatesRef.current = selectedDates
-  const onToggleDateRef = useRef(onToggleDate)
-  onToggleDateRef.current = onToggleDate
-  const minDateRef = useRef(minDate)
-  minDateRef.current = minDate
-  const maxDateRef = useRef(maxDate)
-  maxDateRef.current = maxDate
-  const todayStrRef = useRef('')
-  todayStrRef.current = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+  // ── All mutable state in a single ref to avoid stale closures entirely ──
+  const s = useRef({
+    dragStart: null as string | null,
+    dragHover: null as string | null,
+    isDragging: false,
+    dragActivated: false,
+    selectedDates: selectedDates,
+    onToggleDate: onToggleDate,
+    minDate: minDate,
+    maxDate: maxDate,
+  })
+  // Keep refs current
+  s.current.selectedDates = selectedDates
+  s.current.onToggleDate = onToggleDate
+  s.current.minDate = minDate
+  s.current.maxDate = maxDate
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
   const hasAvatars = !!memberAvatars
+
+  // ── Helper: get date string from a button child ──
+  function getDateFromTarget(el: EventTarget | null): string | null {
+    if (!(el instanceof Element)) return null
+    return el.closest('[data-date]')?.getAttribute('data-date') || null
+  }
+
+  // ── All pointer events on native DOM, not React synthetic events ──
+  useEffect(() => {
+    const cal = calendarRef.current
+    if (!cal) return
+
+    function onDown(e: PointerEvent) {
+      const date = getDateFromTarget(e.target)
+      if (!date) return
+      if (date < todayStr) return
+      if (s.current.minDate && date < s.current.minDate) return
+      if (s.current.maxDate && date > s.current.maxDate) return
+
+      s.current.dragStart = date
+      s.current.dragHover = date
+      s.current.isDragging = true
+      s.current.dragActivated = false
+      setDragHoverVisual(date)
+      e.preventDefault() // prevent text selection, focus, etc.
+    }
+
+    function onMove(e: PointerEvent) {
+      if (!s.current.isDragging) return
+
+      // Find what's under the pointer right now
+      const el = document.elementFromPoint(e.clientX, e.clientY)
+      const date = getDateFromTarget(el)
+      if (!date || date === s.current.dragHover) return
+
+      s.current.dragHover = date
+      if (date !== s.current.dragStart) {
+        s.current.dragActivated = true
+      }
+      setDragHoverVisual(date)
+    }
+
+    function onEnd(_e: PointerEvent) {
+      if (!s.current.isDragging) return
+      const { dragStart, dragHover, dragActivated } = s.current
+      s.current.isDragging = false
+      s.current.dragStart = null
+      s.current.dragHover = null
+      s.current.dragActivated = false
+      setDragHoverVisual(null)
+
+      if (!dragStart || !dragHover) return
+
+      // Single click
+      if (!dragActivated) {
+        s.current.onToggleDate(dragStart)
+        return
+      }
+
+      // Drag: toggle range
+      const range = getDateRange(dragStart, dragHover)
+      const curSel = s.current.selectedDates
+      const startSel = curSel.includes(dragStart)
+      const ts = todayStr
+      const mn = s.current.minDate
+      const mx = s.current.maxDate
+
+      range.forEach(date => {
+        if (date < ts) return
+        if (mn && date < mn) return
+        if (mx && date > mx) return
+        if (startSel) { if (curSel.includes(date)) s.current.onToggleDate(date) }
+        else { if (!curSel.includes(date)) s.current.onToggleDate(date) }
+      })
+    }
+
+    function onCancel() {
+      if (!s.current.isDragging) return
+      s.current.isDragging = false
+      s.current.dragStart = null
+      s.current.dragHover = null
+      s.current.dragActivated = false
+      setDragHoverVisual(null)
+    }
+
+    cal.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onCancel)
+
+    return () => {
+      cal.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onCancel)
+    }
+  }, [viewMonth, viewYear, todayStr]) // re-attach when month/year changes
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1) }
@@ -83,128 +178,28 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
 
   const dateStr = (d: number) => `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
 
-  // ── Get date string from a DOM element ──
-  const getDateFromElement = useCallback((el: Element | null): string | null => {
-    if (!el) return null
-    const date = el.getAttribute('data-date')
-    if (date) return date
-    // Check parent (in case the child span was hit)
-    const parent = el.closest('[data-date]')
-    return parent ? parent.getAttribute('data-date') : null
-  }, [])
-
-  // ── Global pointerup ──
-  useEffect(() => {
-    function handleUp() {
-      if (!isDraggingRef.current) return
-      const start = dragStartRef.current
-      const hoverEnd = dragHoverRef.current
-
-      if (!start || !hoverEnd) {
-        isDraggingRef.current = false
-        dragStartRef.current = null
-        dragHoverRef.current = null
-        dragActivatedRef.current = false
-        setDragHoverVisual(null)
-        return
-      }
-
-      // Single click
-      if (!dragActivatedRef.current) {
-        onToggleDateRef.current(start)
-        isDraggingRef.current = false
-        dragStartRef.current = null
-        dragHoverRef.current = null
-        dragActivatedRef.current = false
-        setDragHoverVisual(null)
-        return
-      }
-
-      // Drag
-      const range = getDateRange(start, hoverEnd)
-      const curSelected = selectedDatesRef.current
-      const toggle = onToggleDateRef.current
-      const startSel = curSelected.includes(start)
-      const ts = todayStrRef.current
-
-      range.forEach(date => {
-        if (date < ts) return
-        if (minDateRef.current && date < minDateRef.current) return
-        if (maxDateRef.current && date > maxDateRef.current) return
-        if (startSel) { if (curSelected.includes(date)) toggle(date) }
-        else { if (!curSelected.includes(date)) toggle(date) }
-      })
-
-      isDraggingRef.current = false
-      dragStartRef.current = null
-      dragHoverRef.current = null
-      dragActivatedRef.current = false
-      setDragHoverVisual(null)
-    }
-
-    window.addEventListener('pointerup', handleUp)
-    return () => window.removeEventListener('pointerup', handleUp)
-  }, [])
-
-  // ── pointerdown on date button ──
-  function handlePointerDown(date: string) {
-    if (date < todayStr) return
-    if (minDate && date < minDate) return
-    if (maxDate && date > maxDate) return
-
-    dragStartRef.current = date
-    dragHoverRef.current = date
-    isDraggingRef.current = true
-    dragActivatedRef.current = false
-    setDragHoverVisual(date)
-  }
-
-  // ── pointermove on container: detect date under pointer reliably ──
-  function handlePointerMove(e: React.PointerEvent) {
-    if (!isDraggingRef.current) return
-
-    // Find the element at the current pointer position
-    const el = document.elementFromPoint(e.clientX, e.clientY)
-    const date = getDateFromElement(el)
-    if (!date || date === dragHoverRef.current) return
-
-    dragHoverRef.current = date
-    if (date !== dragStartRef.current) {
-      dragActivatedRef.current = true
-    }
-    setDragHoverVisual(date)
-  }
-
   const cells: (number | null)[] = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
-  const dragRange = dragStartRef.current && dragHoverVisual
-    ? getDateRange(dragStartRef.current, dragHoverVisual)
+  // Compute drag range for visual highlighting
+  const dragRange = s.current.dragStart && dragHoverVisual
+    ? getDateRange(s.current.dragStart, dragHoverVisual)
     : []
 
   return (
     <div
-      ref={containerRef}
+      ref={calendarRef}
       className="select-none touch-none"
-      onPointerMove={handlePointerMove}
-      onMouseLeave={() => {
-        if (isDraggingRef.current) {
-          isDraggingRef.current = false
-          dragStartRef.current = null
-          dragHoverRef.current = null
-          dragActivatedRef.current = false
-          setDragHoverVisual(null)
-        }
-      }}
+      style={{ touchAction: 'none' }}
     >
       {/* Month nav */}
       <div className="flex items-center justify-between mb-2">
-        <button type="button" onClick={prevMonth} className="p-1 text-gray-400 hover:text-gray-600">
+        <button type="button" onPointerDown={e => e.stopPropagation()} onClick={prevMonth} className="p-1 text-gray-400 hover:text-gray-600">
           <ChevronLeft className="w-4 h-4" />
         </button>
         <span className="text-sm font-medium text-gray-700">{viewYear}年 {MONTHS[viewMonth]}</span>
-        <button type="button" onClick={nextMonth} className="p-1 text-gray-400 hover:text-gray-600">
+        <button type="button" onPointerDown={e => e.stopPropagation()} onClick={nextMonth} className="p-1 text-gray-400 hover:text-gray-600">
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -222,7 +217,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           if (d === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
           const ds = dateStr(d)
           const sel = selectedDates.includes(ds)
-          const inDragRange = isDraggingRef.current && dragRange.includes(ds)
+          const inDragRange = s.current.isDragging && dragRange.includes(ds)
           const past = ds < todayStr
           const outOfRange = !!((minDate && ds < minDate) || (maxDate && ds > maxDate))
           const disabled = past || outOfRange
@@ -230,13 +225,10 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           const avatars = memberAvatars?.[ds] || []
 
           return (
-            <button
+            <div
               key={ds}
-              type="button"
               data-date={ds}
-              onPointerDown={() => handlePointerDown(ds)}
-              disabled={disabled}
-              className={`rounded-md text-xs font-medium transition-all flex flex-col items-center justify-start pt-0.5 outline-none ${
+              className={`rounded-md text-xs font-medium transition-all flex flex-col items-center justify-start pt-0.5 select-none cursor-pointer ${
                 hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'
               } ${
                 sel
@@ -252,9 +244,9 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
                           : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <span>{d}</span>
+              <span className="pointer-events-none">{d}</span>
               {hasAvatars && avatars.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-0.5 mt-1 pb-0.5">
+                <div className="flex flex-wrap justify-center gap-0.5 mt-1 pb-0.5 pointer-events-none">
                   {avatars.slice(0, 6).map((name, ai) => (
                     <span
                       key={ai}
@@ -269,7 +261,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
                   )}
                 </div>
               )}
-            </button>
+            </div>
           )
         })}
       </div>
