@@ -39,6 +39,7 @@ export default function PlanUploadForm({
   const [showRawText, setShowRawText] = useState(false)
   const [completenessShown, setCompletenessShown] = useState(true)
   const [showFormatted, setShowFormatted] = useState(false)
+  const [currentSection, setCurrentSection] = useState(0)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -288,18 +289,48 @@ export default function PlanUploadForm({
         </div>
       )}
 
-      {/* Analysis Result */}
-      {isAnalyzed && planAnalysis && (
-        <div className="mt-3 bg-white rounded-lg border border-blue-200 overflow-hidden">
-          <div className="px-3 py-2 bg-blue-50 border-b border-blue-200 flex items-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-blue-600" />
-            <span className="text-xs font-semibold text-blue-800">AI 計劃書分析結果</span>
+      {/* Analysis Result — with pagination */}
+      {isAnalyzed && planAnalysis && (() => {
+        const sections = planAnalysis.split(/\n(?=## |### |(?:\* |-\ )?[📋👥⏱💰📦⚠️🎯])/).filter(Boolean)
+        const totalSections = sections.length
+        const sectionLabel = totalSections > 1 ? `${currentSection + 1}/${totalSections}` : ''
+
+        // Reset to first section when analysis changes
+        if (currentSection >= totalSections) setCurrentSection(0)
+
+        return (
+          <div className="mt-3 bg-white rounded-lg border border-blue-200 overflow-hidden">
+            <div className="px-3 py-2 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-blue-600" />
+                <span className="text-xs font-semibold text-blue-800">AI 計劃書分析結果</span>
+                {sectionLabel && (
+                  <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full font-medium">
+                    {sectionLabel}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                {totalSections > 1 && currentSection > 0 && (
+                  <button onClick={() => setCurrentSection(currentSection - 1)}
+                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-100 rounded">
+                    上一頁
+                  </button>
+                )}
+                {totalSections > 1 && currentSection < totalSections - 1 && (
+                  <button onClick={() => setCurrentSection(currentSection + 1)}
+                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-100 rounded">
+                    下一頁
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="p-3 text-xs text-gray-700 whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed">
+              {sections[currentSection]}
+            </div>
           </div>
-          <div className="p-3 text-xs text-gray-700 whitespace-pre-wrap max-h-96 overflow-y-auto">
-            {planAnalysis}
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Formatted Plan Preview */}
       {hasFormatted && (
