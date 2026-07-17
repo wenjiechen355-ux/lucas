@@ -19,24 +19,24 @@ export default async function LeaderDocumentsPage() {
     .order('updated_at', { ascending: false })
     .limit(50)
 
-  // 活動開始審批
+  // 活動開始審批（3 步審批：vp_pending = 待副主席批示）
   const { data: eventApprovals } = await supabase
     .from('events')
-    .select('id,title,status,start_approval_status,start_approval_comment,plan_doc_path,plan_doc_name,created_by,created_at,updated_at')
-    .in('start_approval_status', ['pending', 'approved', 'rejected'])
+    .select('id,title,status,approval_state,approval_rejected_comment,plan_doc_path,plan_doc_name,created_by,created_at,updated_at')
+    .in('approval_state', ['vp_pending', 'vp_approved', 'chair_approved', 'leader_approved', 'rejected'])
     .order('updated_at', { ascending: false })
     .limit(50)
 
-  // 合併待審批
+  // 合併待審批（vp_pending 先係需要處理嘅狀態）
   const docPending = documents?.filter(d => d.status === 'pending') || []
   const progPending = progressItems?.filter(p => p.document_status === 'pending') || []
-  const eventPending = eventApprovals?.filter(e => e.start_approval_status === 'pending') || []
+  const eventPending = eventApprovals?.filter(e => e.approval_state === 'vp_approved') || []
   const pendingAll = [...docPending, ...progPending, ...eventPending]
 
   // 合併已處理
   const docReviewed = documents?.filter(d => d.status !== 'pending') || []
   const progReviewed = progressItems?.filter(p => p.document_status !== 'pending') || []
-  const eventReviewed = eventApprovals?.filter(e => e.start_approval_status !== 'pending') || []
+  const eventReviewed = eventApprovals?.filter(e => e.approval_state !== 'vp_pending') || []
   const reviewedAll = [...docReviewed, ...progReviewed, ...eventReviewed].sort((a, b) => 
     new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
   )
@@ -62,7 +62,7 @@ export default async function LeaderDocumentsPage() {
         <ArrowRight className="w-3 h-3" />
         <Play className="w-3.5 h-3.5" /> 活動審批
         <ArrowRight className="w-3 h-3" />
-        <span>主席/副主席審核</span>
+        <span>3 步審批：副主席→主席→領袖</span>
       </div>
 
       {/* 待审批 */}
@@ -102,13 +102,19 @@ export default async function LeaderDocumentsPage() {
 
 function ReviewCard({ item }: { item: any }) {
   const isProgress = 'document_status' in item
-  const isEvent = 'start_approval_status' in item
-  const status = isEvent ? (item.start_approval_status || 'pending') : isProgress ? (item.document_status || 'pending') : (item.status || 'pending')
-  const title = isEvent ? `活動開始審批：${item.title}` : isProgress ? item.title : (item.title || '未命名')
+  const isEvent = 'approval_state' in item
+  const state = isEvent ? (item.approval_state || 'vp_pending') : ''
+  const status = isEvent
+    ? (state === 'vp_pending' ? 'pending' : state === 'rejected' ? 'rejected' : 'approved')
+    : isProgress ? (item.document_status || 'pending') : (item.status || 'pending')
+  const stepLabel = isEvent
+    ? (state === 'vp_pending' ? '待副主席審批 (1/3)' : state === 'vp_approved' ? '副主席已批 (1/3)' : state === 'chair_approved' ? '主席已批 (2/3)' : state === 'leader_approved' ? '已全部審批 (3/3)' : '已退回')
+    : ''
+  const title = isEvent ? `活動開始審批：${item.title}${stepLabel ? ` · ${stepLabel}` : ''}` : isProgress ? item.title : (item.title || '未命名')
   const fileName = isEvent ? item.plan_doc_name : isProgress ? item.document_name : item.file_name
   const memberName = isEvent ? '(執委會活動)' : (item.profiles?.full_name || '(未知)')
   const createdAt = new Date(item.created_at || item.updated_at).toLocaleDateString('zh-HK')
-  const reviewComment = isEvent ? item.start_approval_comment : isProgress ? item.reviewer_comment : item.review_comment
+  const reviewComment = isEvent ? item.approval_rejected_comment : isProgress ? item.reviewer_comment : item.review_comment
   const reviewLink = isEvent ? '/dashboard/leader/event-prep' : isProgress ? `/dashboard/progress/${item.id}` : `/dashboard/leader/documents/${item.id}`
 
   const statusConfig: Record<string, { icon: any; color: string; label: string }> = {

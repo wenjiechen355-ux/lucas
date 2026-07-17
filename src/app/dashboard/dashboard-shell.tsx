@@ -18,7 +18,7 @@ import {
   User,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays, Wallet, BarChart3 } from 'lucide-react'
+import { Calendar, Eye, CheckSquare, ClipboardList, Database, Vote, Megaphone, CalendarDays, Wallet, BarChart3, DollarSign } from 'lucide-react'
 import { Search } from 'lucide-react'
 import NotifBell from '@/components/notif-bell'
 import ThemeToggle from '@/components/theme-toggle'
@@ -30,6 +30,7 @@ const memberNavItems = [
   { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
   { label: '出席打卡', href: '/dashboard/attendance', icon: ClipboardCheck },
   { label: '活動日曆', href: '/dashboard/calendar', icon: CalendarDays },
+  { label: '活動付款', href: '/dashboard/payments', icon: DollarSign },
   { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
   { label: '我的文檔', href: '/dashboard/documents', icon: FileText },
   { label: '活動投票', href: '/dashboard/event-polls', icon: Vote },
@@ -42,6 +43,7 @@ const leaderNavItems = [
   { label: '出席管理', href: '/dashboard/leader/attendance', icon: ClipboardCheck },
   { label: '財政管理', href: '/dashboard/leader/finance', icon: Wallet },
   { label: '出席分析', href: '/dashboard/leader/attendance-analytics', icon: BarChart3 },
+  { label: '活動付款', href: '/dashboard/payments', icon: DollarSign },
   { label: '活動時間徵集', href: '/dashboard/leader/event-polls', icon: Vote },
   { label: '活動投票', href: '/dashboard/event-polls', icon: Vote },
   { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
@@ -51,6 +53,7 @@ const leaderNavItems = [
 const execNavItems = [
   { label: '儀表板', href: '/dashboard', icon: LayoutDashboard },
   { label: '活動日曆', href: '/dashboard/calendar', icon: CalendarDays },
+  { label: '活動付款', href: '/dashboard/payments', icon: DollarSign },
   { label: '進度記錄', href: '/dashboard/progress', icon: TrendingUp },
   { label: '活動籌備', href: '/dashboard/leader/event-prep', icon: ClipboardList },
   { label: '資料庫', href: '/dashboard/leader/event-archive', icon: Database },
@@ -76,6 +79,7 @@ export default function DashboardShell({
   const router = useRouter()
   const supabase = createClient()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [badges, setBadges] = useState<Record<string, number>>({})
 
   const isLeader = profile.role === 'leader'
   const isExec = !!profile.position // 所有有職位嘅執委會成員
@@ -116,6 +120,105 @@ export default function DashboardShell({
       router.replace('/dashboard')
     }
   }, [pathname, isLeader, isExec, isChair])
+
+  // Fetch badge counts for pending items — all nav items
+  useEffect(() => {
+    async function fetchBadges() {
+      const counts: Record<string, number> = {}
+      if (!profile?.id) return
+
+      // ── All roles ──
+
+      // 通知中心 — unread notifications
+      const { count: notifCount } = await supabase
+        .from('notifications').select('*', { count: 'exact', head: true })
+        .eq('user_id', profile.id).eq('read', false)
+      if (notifCount && notifCount > 0) counts['/dashboard/notifications'] = notifCount
+
+      // 活動付款 — pending payments
+      const { count: paymentCount } = await supabase
+        .from('event_payments').select('*', { count: 'exact', head: true })
+        .eq('member_id', profile.id).eq('status', 'pending')
+      if (paymentCount && paymentCount > 0) counts['/dashboard/payments'] = paymentCount
+
+      // 活動投票 — open polls user hasn't voted in
+      if (isExec) {
+        // Exec: all open polls
+        const { data: allPolls } = await supabase.from('event_polls').select('id').eq('status', 'open')
+        const { data: myVotes } = await supabase.from('event_poll_votes').select('poll_id').eq('member_id', profile.id)
+        const votedSet = new Set((myVotes || []).map(v => v.poll_id))
+        const pendingVotes = (allPolls || []).filter(p => !votedSet.has(p.id)).length
+        if (pendingVotes > 0) counts['/dashboard/event-polls'] = pendingVotes
+      } else {
+        // Member: open polls excluding exec-only
+        const { data: allPolls } = await supabase.from('event_polls').select('id').eq('status', 'open').eq('is_exec_meeting', false)
+        const { data: myVotes } = await supabase.from('event_poll_votes').select('poll_id').eq('member_id', profile.id)
+        const votedSet = new Set((myVotes || []).map(v => v.poll_id))
+        const pendingVotes = (allPolls || []).filter(p => !votedSet.has(p.id)).length
+        if (pendingVotes > 0) counts['/dashboard/event-polls'] = pendingVotes
+      }
+
+      // 出席打卡 — today's events with open attendance and no check-in
+      const today = new Date().toISOString().split('T')[0]
+      const { data: todayEvents } = await supabase
+        .from('events').select('id').eq('attendance_open', true)
+      if (todayEvents && todayEvents.length > 0) {
+        const eventIds = todayEvents.map(e => e.id)
+        const { data: myAttendance } = await supabase
+          .from('attendance').select('event_id').eq('member_id', profile.id).in('event_id', eventIds)
+        const checkedInSet = new Set((myAttendance || []).map(a => a.event_id))
+        const pendingCheckin = eventIds.filter(id => !checkedInSet.has(id)).length
+        if (pendingCheckin > 0) counts['/dashboard/attendance'] = pendingCheckin
+      }
+
+      // 我的文檔 — documents with pending review status
+      const { count: pendingDocCount } = await supabase
+        .from('documents').select('*', { count: 'exact', head: true })
+        .eq('uploader_id', profile.id).eq('status', 'pending')
+      if (pendingDocCount && pendingDocCount > 0) counts['/dashboard/documents'] = pendingDocCount
+
+      // 進度記錄 — items with uploaded proof pending approval (chair) OR items user can submit
+      const { count: pendingProgressCount } = await supabase
+        .from('progress_items').select('*', { count: 'exact', head: true })
+        .eq('member_id', profile.id).eq('status', 'pending')
+      if (pendingProgressCount && pendingProgressCount > 0) counts['/dashboard/progress'] = pendingProgressCount
+
+      // ── Leader / Exec only ──
+
+      // 文檔審批 — documents pending my review (leader only)
+      if (isLeader) {
+        const { count: docReviewCount } = await supabase
+          .from('documents').select('*', { count: 'exact', head: true })
+          .eq('reviewer_id', profile.id).eq('status', 'pending')
+        if (docReviewCount && docReviewCount > 0) counts['/dashboard/leader/documents'] = docReviewCount
+      }
+
+      // 活動開始審批 — 主席睇到 vp_approved（副主席已批，等主席批）
+      if (isChair) {
+        const { count: approvalCount } = await supabase
+          .from('events').select('*', { count: 'exact', head: true })
+          .eq('approval_state', 'vp_approved')
+        if (approvalCount && approvalCount > 0) counts['/dashboard/leader/approvals'] = approvalCount
+      }
+
+      // 活動籌備 — pending prep items assigned to me (exec)
+      if (isExec) {
+        const { count: myPrepCount } = await supabase
+          .from('event_prep_items').select('*', { count: 'exact', head: true })
+          .eq('responsible_id', profile.id).eq('status', 'pending')
+        if (myPrepCount && myPrepCount > 0) counts['/dashboard/leader/event-prep'] = myPrepCount
+      }
+
+      setBadges(counts)
+    }
+
+    if (profile?.id) {
+      fetchBadges()
+      // Refresh every 60s
+      const interval = setInterval(fetchBadges, 60000)
+      return () => clearInterval(interval)
+    }
+  }, [profile?.id])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -176,7 +279,12 @@ export default function DashboardShell({
                 `}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {badges[item.href] > 0 && (
+                  <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                    {badges[item.href] > 99 ? '99+' : badges[item.href]}
+                  </span>
+                )}
               </a>
             )
           })}

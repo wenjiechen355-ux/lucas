@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, ClipboardList, User, Calendar, MapPin, MoreHorizontal, CheckCircle, XCircle, Clock, RefreshCw, Trash2, FileText, Play, Flag, DollarSign, Camera, Edit3 } from 'lucide-react'
+import { Plus, ClipboardList, User, Calendar, MapPin, MoreHorizontal, CheckCircle, XCircle, Clock, RefreshCw, Trash2, FileText, Play, Flag, DollarSign, Camera, Edit3, AlertCircle, ChevronRight, Shield, Crown, Users } from 'lucide-react'
 import PlanUploadForm from './plan-upload-form'
 import EventDocUpload from './event-doc-upload'
 import EventTransactions from '@/components/event-transactions'
@@ -38,7 +38,18 @@ interface EventData {
   agenda_analysis?: string
   agenda_analysis_status?: string
   is_online?: boolean
-  start_approved?: boolean
+  // 新 3 步審批字段
+  approval_state?: string       // 'none' | 'vp_pending' | 'vp_approved' | 'chair_approved' | 'leader_approved' | 'rejected'
+  vp_approved_by?: string
+  vp_approved_at?: string
+  chair_approved_by?: string
+  chair_approved_at?: string
+  leader_approved_by?: string
+  leader_approved_at?: string
+  approval_rejected_by?: string
+  approval_rejected_at?: string
+  approval_rejected_comment?: string
+  // 舊字段（向後兼容）
   start_approval_status?: string
   start_approval_comment?: string
 }
@@ -51,6 +62,31 @@ interface PrepItem {
   responsible_id?: string
   status: string
   created_by: string
+}
+
+/* ───── 審批狀態 helpers ───── */
+
+/** 取得當前審批步驟描述 */
+function getApprovalStepText(state: string | undefined, rejectComment?: string) {
+  switch (state) {
+    case 'none': return { label: '未申請', color: 'text-gray-400', bg: 'bg-gray-50', icon: Clock }
+    case 'vp_pending': return { label: '待副主席審批', color: 'text-amber-600', bg: 'bg-amber-50', icon: Clock }
+    case 'vp_approved': return { label: '副主席已批 · 待主席審批', color: 'text-blue-600', bg: 'bg-blue-50', icon: Clock }
+    case 'chair_approved': return { label: '主席已批 · 待領袖審批', color: 'text-purple-600', bg: 'bg-purple-50', icon: Clock }
+    case 'leader_approved': return { label: '全部審批通過', color: 'text-green-600', bg: 'bg-green-50', icon: CheckCircle }
+    case 'rejected': return { label: `已退回${rejectComment ? `：${rejectComment}` : ''}`, color: 'text-red-600', bg: 'bg-red-50', icon: XCircle }
+    default: return { label: '未申請', color: 'text-gray-400', bg: 'bg-gray-50', icon: Clock }
+  }
+}
+
+/** 審批步驟進度（1-based） */
+function getApprovalStep(state: string | undefined): number {
+  switch (state) {
+    case 'vp_approved': return 1
+    case 'chair_approved': return 2
+    case 'leader_approved': return 3
+    default: return 0
+  }
 }
 
 export default function EventPrepPage() {
@@ -94,7 +130,7 @@ export default function EventPrepPage() {
       .order('full_name')
     setExecMembers(members || [])
 
-    // Get events that have or can have prep items
+    // Get events
     const { data: evts } = await supabase
       .from('events')
       .select('*')
@@ -115,7 +151,7 @@ export default function EventPrepPage() {
       .order('created_at', { ascending: false })
     setPrepItems(items || [])
 
-    // Get all attendance records (for showing status in reminder)
+    // Get all attendance records
     const { data: attRecs } = await supabase
       .from('attendance')
       .select('event_id, member_id, status')
@@ -189,26 +225,75 @@ export default function EventPrepPage() {
     i => i.responsible_id === profile?.id && i.status !== 'completed'
   )
 
-  const isChair = profile?.position === '主席' || profile?.position === '副主席'
+  // ─── 角色判斷 ───
+  const isVp = profile?.position === '副主席'
+  const isChair = profile?.position === '主席'
+  const isOtherLeader = !!profile?.position && profile?.position !== '主席' && profile?.position !== '副主席'
   const isExec = !!profile?.position
   const isSecretary = profile?.position === '文書'
 
-  async function handleStartEvent(eventId: string) {
-    if (!confirm('確定開始此活動？活動開始後會開放出席俾成員簽到。')) return
-    await supabase.from('events').update({ status: 'active', attendance_open: true, start_approval_status: 'approved' }).eq('id', eventId)
-    loadData()
-  }
+  // ─── 審批處理 ───
 
+  /** 申請開始活動（任何執委會成員） */
   async function handleRequestStart(eventId: string) {
-    if (!confirm('提交開始活動申請？主席/副主席審批後即可開始。')) return
-    await supabase.from('events').update({ start_approval_status: 'pending' }).eq('id', eventId)
+    if (!confirm('提交 3 步審批申請？副主席 → 主席 → 領袖 審批後即可開始活動。')) return
+    await supabase.from('events').update({
+      approval_state: 'vp_pending',
+      approval_rejected_comment: null,
+    }).eq('id', eventId)
     loadData()
   }
 
-  async function handleRejectStart(eventId: string) {
+  /** Step 1: 副主席審批通過 */
+  async function handleVpApprove(eventId: string) {
+    if (!confirm('副主席審批通過？下一步將交由主席審批。')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('events').update({
+      approval_state: 'vp_approved',
+      vp_approved_by: user?.id,
+      vp_approved_at: new Date().toISOString(),
+      approval_rejected_comment: null,
+    }).eq('id', eventId)
+    loadData()
+  }
+
+  /** Step 2: 主席審批通過 */
+  async function handleChairApprove(eventId: string) {
+    if (!confirm('主席審批通過？下一步將交由領袖審批。')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('events').update({
+      approval_state: 'chair_approved',
+      chair_approved_by: user?.id,
+      chair_approved_at: new Date().toISOString(),
+    }).eq('id', eventId)
+    loadData()
+  }
+
+  /** Step 3: 領袖審批通過 → 活動自動開始 */
+  async function handleLeaderApprove(eventId: string) {
+    if (!confirm('領袖審批通過？活動將立即開始並開放簽到。')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('events').update({
+      approval_state: 'leader_approved',
+      leader_approved_by: user?.id,
+      leader_approved_at: new Date().toISOString(),
+      status: 'active',
+      attendance_open: true,
+    }).eq('id', eventId)
+    loadData()
+  }
+
+  /** 退回（任何步驟） */
+  async function handleRejectApproval(eventId: string) {
     const comment = prompt('請輸入退回原因（可選）：')
-    if (comment === null) return // cancelled
-    await supabase.from('events').update({ start_approval_status: 'rejected', start_approval_comment: comment || null }).eq('id', eventId)
+    if (comment === null) return
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from('events').update({
+      approval_state: 'rejected',
+      approval_rejected_by: user?.id,
+      approval_rejected_at: new Date().toISOString(),
+      approval_rejected_comment: comment || null,
+    }).eq('id', eventId)
     loadData()
   }
 
@@ -305,12 +390,27 @@ export default function EventPrepPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {events.map(event => (
+          {events.map(event => {
+            // 決定使用新定舊審批字段
+            const state = event.approval_state || (
+              !event.start_approval_status || event.start_approval_status === 'approved'
+                ? 'none'
+                : event.start_approval_status === 'pending'
+                  ? 'vp_pending'
+                  : event.start_approval_status === 'rejected'
+                    ? 'rejected'
+                    : 'none'
+            )
+            const stepInfo = getApprovalStepText(state, event.approval_rejected_comment || event.start_approval_comment)
+            const currentStep = getApprovalStep(state)
+            const StepIcon = stepInfo.icon
+
+            return (
             <div key={event.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {/* Event header */}
               <div className="p-5 border-b border-gray-100">
                 <div className="flex items-start justify-between">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-900">{event.title}</h3>
                       {event.status === 'preparation' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600">籌備中</span>}
@@ -323,7 +423,7 @@ export default function EventPrepPage() {
                        event.location ? <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{event.location}</span> : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     {/* Member Reminder */}
                     {(() => {
                       const eventAttMap = attendanceMap[event.id] || {}
@@ -342,46 +442,112 @@ export default function EventPrepPage() {
                         />
                       )
                     })()}
-                    {/* 審核人選擇 + 提醒 */}
-                    {event.status === 'preparation' && (!event.start_approval_status || event.start_approval_status === 'rejected') && (
-                      <div className="mr-2">
-                        <ReviewerSelector type="event" title={event.title}
-                          selectedId={eventReviewers[event.id] || null}
-                          onSelectReviewer={(id) => setEventReviewers(prev => ({ ...prev, [event.id]: id || '' }))}
-                          link={`/dashboard/leader/event-prep`}
-                        />
-                      </div>
-                    )}
-                    {/* 開始/審批活動 */}
-                    {event.status === 'preparation' && (!event.start_approval_status || event.start_approval_status === 'rejected') && isExec && (
+
+                    {/* ─── 3 步審批 UI ─── */}
+                    {event.status === 'preparation' && state === 'none' && isExec && (
                       <button onClick={() => handleRequestStart(event.id)}
-                        disabled={!eventReviewers[event.id]}
-                        title={!eventReviewers[event.id] ? '請先選擇審核人' : ''}
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100">
                         <Play className="w-3.5 h-3.5" /> 申請開始活動
                       </button>
                     )}
-                    {event.status === 'preparation' && event.start_approval_status === 'pending' && isChair && (
+
+                    {event.status === 'preparation' && state === 'rejected' && (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg max-w-[200px] truncate" title={event.approval_rejected_comment || event.start_approval_comment || ''}>
+                          <XCircle className="w-3 h-3 flex-shrink-0" /> {event.approval_rejected_comment || event.start_approval_comment || '已退回'}
+                        </span>
+                        {isExec && (
+                          <button onClick={() => handleRequestStart(event.id)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100">
+                            重新申請
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Step 1: VP pending — 副主席審批 */}
+                    {event.status === 'preparation' && state === 'vp_pending' && isVp && (
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
-                          <Clock className="w-3 h-3" /> 待批核
+                          <Clock className="w-3 h-3" /> 待你審批 (1/3)
                         </span>
-                        <button onClick={() => handleStartEvent(event.id)}
+                        <button onClick={() => handleVpApprove(event.id)}
                           className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100">
-                          <CheckCircle className="w-3.5 h-3.5" /> 批准開始
+                          <CheckCircle className="w-3.5 h-3.5" /> 副主席批准
                         </button>
-                        <button onClick={() => handleRejectStart(event.id)}
+                        <button onClick={() => handleRejectApproval(event.id)}
                           className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">
                           <XCircle className="w-3.5 h-3.5" /> 退回
                         </button>
                       </div>
                     )}
-                    {event.start_approval_comment && event.start_approval_status === 'rejected' && (
-                      <div className="mt-2 text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
-                        💬 {event.start_approval_comment}
-                      </div>
+
+                    {/* Step 1 done, Step 2 pending — 主席審批 */}
+                    {event.status === 'preparation' && state === 'vp_approved' && (
+                      <>
+                        {isChair ? (
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                              <Clock className="w-3 h-3" /> 待你審批 (2/3)
+                            </span>
+                            <button onClick={() => handleChairApprove(event.id)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100">
+                              <CheckCircle className="w-3.5 h-3.5" /> 主席批准
+                            </button>
+                            <button onClick={() => handleRejectApproval(event.id)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">
+                              <XCircle className="w-3.5 h-3.5" /> 退回
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                            <Clock className="w-3 h-3" /> 待主席審批 (2/3)
+                          </span>
+                        )}
+                      </>
                     )}
-                    {isChair && event.status === 'active' && (
+
+                    {/* Step 2 done, Step 3 pending — 領袖審批 */}
+                    {event.status === 'preparation' && state === 'chair_approved' && (
+                      <>
+                        {isOtherLeader ? (
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">
+                              <Clock className="w-3 h-3" /> 待你審批 (3/3)
+                            </span>
+                            <button onClick={() => handleLeaderApprove(event.id)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100">
+                              <CheckCircle className="w-3.5 h-3.5" /> 領袖批准
+                            </button>
+                            <button onClick={() => handleRejectApproval(event.id)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">
+                              <XCircle className="w-3.5 h-3.5" /> 退回
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">
+                            <Clock className="w-3 h-3" /> 待領袖審批 (3/3)
+                          </span>
+                        )}
+                      </>
+                    )}
+
+                    {/* All approved — show info */}
+                    {state === 'leader_approved' && event.status === 'active' && (
+                      <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-lg">
+                        <CheckCircle className="w-3 h-3" /> 3 步審批通過
+                      </span>
+                    )}
+
+                    {/* VP / Chair waiting (show for non-approver roles) */}
+                    {event.status === 'preparation' && state === 'vp_pending' && !isVp && (
+                      <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                        <Clock className="w-3 h-3" /> 待副主席審批 (1/3)
+                      </span>
+                    )}
+
+                    {/* End event button */}
+                    {(isChair || isVp) && event.status === 'active' && (
                       <button
                         onClick={() => handleEndEvent(event.id)}
                         className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
@@ -389,6 +555,8 @@ export default function EventPrepPage() {
                         <Flag className="w-3.5 h-3.5" /> 結束活動
                       </button>
                     )}
+
+                    {/* Add prep item button */}
                     {event.status === 'preparation' && (
                       <button
                         onClick={() => { setSelectedEvent(event.id); setShowModal(true) }}
@@ -397,7 +565,8 @@ export default function EventPrepPage() {
                         <Plus className="w-3.5 h-3.5" /> 新增項目
                       </button>
                     )}
-                    {/* 刪除按鈕 — 任何狀態、任何執委會成員都可以刪 */}
+
+                    {/* 刪除 */}
                     <button
                       onClick={() => handleDeleteEvent(event.id)}
                       className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -407,9 +576,53 @@ export default function EventPrepPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* ─── 審批進度條 ─── */}
+                {event.status === 'preparation' && state !== 'none' && state !== 'rejected' && (
+                  <div className="mt-3 flex items-center gap-1">
+                    {/* Step 1: 副主席 */}
+                    <div className={`flex items-center gap-1.5 text-xs ${
+                      currentStep >= 1 ? 'text-green-600' : state === 'vp_pending' ? 'text-amber-600' : 'text-gray-400'
+                    }`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                        currentStep >= 1 ? 'bg-green-100' : state === 'vp_pending' ? 'bg-amber-100' : 'bg-gray-100'
+                      }`}>
+                        <Shield className="w-3 h-3" />
+                      </div>
+                      <span>副主席</span>
+                      {currentStep >= 1 && <CheckCircle className="w-3 h-3 text-green-500" />}
+                    </div>
+                    <ChevronRight className={`w-3 h-3 ${currentStep >= 1 ? 'text-gray-400' : 'text-gray-200'}`} />
+                    {/* Step 2: 主席 */}
+                    <div className={`flex items-center gap-1.5 text-xs ${
+                      currentStep >= 2 ? 'text-green-600' : currentStep === 1 && state === 'vp_approved' ? 'text-blue-600' : 'text-gray-400'
+                    }`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                        currentStep >= 2 ? 'bg-green-100' : currentStep === 1 ? 'bg-blue-100' : 'bg-gray-100'
+                      }`}>
+                        <Crown className="w-3 h-3" />
+                      </div>
+                      <span>主席</span>
+                      {currentStep >= 2 && <CheckCircle className="w-3 h-3 text-green-500" />}
+                    </div>
+                    <ChevronRight className={`w-3 h-3 ${currentStep >= 2 ? 'text-gray-400' : 'text-gray-200'}`} />
+                    {/* Step 3: 領袖 */}
+                    <div className={`flex items-center gap-1.5 text-xs ${
+                      currentStep >= 3 ? 'text-green-600' : currentStep === 2 && state === 'chair_approved' ? 'text-purple-600' : 'text-gray-400'
+                    }`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                        currentStep >= 3 ? 'bg-green-100' : currentStep === 2 ? 'bg-purple-100' : 'bg-gray-100'
+                      }`}>
+                        <Users className="w-3 h-3" />
+                      </div>
+                      <span>領袖</span>
+                      {currentStep >= 3 && <CheckCircle className="w-3 h-3 text-green-500" />}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* 議程 — 執委會開會（所有執委會成員可見） */}
+              {/* 議程 */}
               {event.is_meeting && (
                 <div className="px-5 py-3 bg-purple-50/30 border-b border-gray-100 flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
@@ -439,10 +652,14 @@ export default function EventPrepPage() {
                 />
               </div>
 
-              {/* 會後提交（活動完成後顯示） */}
+              {/* 活動付款管理 */}
+              <div className="border-b border-gray-100 px-5 py-3">
+                <PaymentManager eventId={event.id} eventStatus={event.status} isExec={isExec} />
+              </div>
+
+              {/* 會後提交 */}
               {event.status === 'completed' && (
                 <div className="border-b border-gray-100 divide-y divide-gray-50 bg-gray-50/50">
-                  {/* 會議記錄 — 僅執委會開會 + 文書先見到 */}
                   {event.is_meeting && isSecretary && (
                     <div className="px-5 py-3 flex items-center justify-between bg-purple-50/50">
                       <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
@@ -539,7 +756,7 @@ export default function EventPrepPage() {
                 <EventTransactions eventId={event.id} isExec={isExec} />
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
@@ -593,6 +810,232 @@ export default function EventPrepPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ───── 活動付款管理元件 ───── */
+function PaymentManager({ eventId, eventStatus, isExec }: { eventId: string; eventStatus: string; isExec: boolean }) {
+  const supabase = createClient()
+  const [paymentType, setPaymentType] = useState<string | null>(null)
+  const [payments, setPayments] = useState<any[]>([])
+  const [allProfiles, setAllProfiles] = useState<any[]>([])
+  const [showMemberPicker, setShowMemberPicker] = useState(false)
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([])
+  const [savingPayment, setSavingPayment] = useState(false)
+
+  useEffect(() => { loadPayments() }, [eventId])
+
+  async function loadPayments() {
+    const { data: evt } = await supabase.from('events').select('payment_type').eq('id', eventId).single()
+    setPaymentType(evt?.payment_type || null)
+
+    const { data: pays } = await supabase
+      .from('event_payments')
+      .select('*, profiles:member_id(full_name)')
+      .eq('event_id', eventId)
+    setPayments(pays || [])
+
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, full_name, position')
+      .order('full_name')
+    setAllProfiles(profs || [])
+  }
+
+  async function handleSetPaymentType(type: string | null) {
+    if (!isExec) return
+    setSavingPayment(true)
+    if (type === 'pre') {
+      setSelectedMembers(payments.filter(p => !p.receipt_path && p.status !== 'paid').map(p => p.member_id))
+      setShowMemberPicker(true)
+    }
+    await fetch('/api/events/set-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId, paymentType: type, memberIds: [] }),
+    })
+    setPaymentType(type)
+    loadPayments()
+    setSavingPayment(false)
+  }
+
+  async function handleConfirmMembers() {
+    if (!isExec || selectedMembers.length === 0) return
+    setSavingPayment(true)
+    const res = await fetch('/api/events/set-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId, paymentType: 'pre', memberIds: selectedMembers }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      setShowMemberPicker(false)
+      loadPayments()
+    } else {
+      alert(data.error || '設定失敗')
+    }
+    setSavingPayment(false)
+  }
+
+  const canSetPayment = isExec && (eventStatus === 'preparation' || eventStatus === 'active')
+  const canPostPayment = isExec && eventStatus === 'completed'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+          <DollarSign className="w-4 h-4 text-green-600" /> 活動付款
+        </span>
+        {canSetPayment && (
+          <div className="flex items-center gap-1">
+            <select
+              value={paymentType || ''}
+              onChange={e => handleSetPaymentType(e.target.value || null)}
+              disabled={savingPayment}
+              className="px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white outline-none"
+            >
+              <option value="">唔需要付款</option>
+              <option value="pre">事前付款</option>
+              <option value="post">事後付款</option>
+            </select>
+          </div>
+        )}
+        {canPostPayment && !paymentType && (
+          <div className="flex items-center gap-1">
+            <select
+              value={paymentType || ''}
+              onChange={e => handleSetPaymentType(e.target.value || null)}
+              disabled={savingPayment}
+              className="px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white outline-none"
+            >
+              <option value="">唔需要付款</option>
+              <option value="post">事後付款</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {paymentType === 'pre' && (
+        <p className="text-xs text-amber-600 mb-2">💰 事前付款 — 需要揀邊啲成員需要俾錢</p>
+      )}
+      {paymentType === 'post' && (
+        <p className="text-xs text-blue-600 mb-2">📋 事後付款 — 活動完成後揀邊啲成員需要俾錢</p>
+      )}
+
+      {paymentType === 'pre' && (
+        <>
+          {showMemberPicker ? (
+            <div className="bg-amber-50 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-medium text-amber-700">揀需要俾錢嘅成員</p>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {allProfiles.map(p => (
+                  <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedMembers.includes(p.id)}
+                      onChange={() => {
+                        setSelectedMembers(prev =>
+                          prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                        )
+                      }}
+                      className="w-3.5 h-3.5 rounded border-gray-300 text-green-600"
+                    />
+                    {p.full_name}
+                    {p.position && <span className="text-gray-400">（{p.position}）</span>}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={handleConfirmMembers} disabled={savingPayment || selectedMembers.length === 0}
+                  className="px-3 py-1 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                  {savingPayment ? '設定中...' : `確定（${selectedMembers.length} 人）`}
+                </button>
+                <button onClick={() => setShowMemberPicker(false)}
+                  className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700">
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => {
+              setSelectedMembers(payments.map(p => p.member_id))
+              setShowMemberPicker(true)
+            }}
+              className="text-xs text-amber-600 hover:text-amber-700 underline">
+              揀需要付款嘅成員（{payments.length} 人已設定）
+            </button>
+          )}
+        </>
+      )}
+
+      {paymentType === 'post' && eventStatus === 'completed' && (
+        <>
+          {showMemberPicker ? (
+            <div className="bg-blue-50 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-medium text-blue-700">揀需要俾錢嘅成員</p>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {allProfiles.map(p => (
+                  <label key={p.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedMembers.includes(p.id)}
+                      onChange={() => {
+                        setSelectedMembers(prev =>
+                          prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                        )
+                      }}
+                      className="w-3.5 h-3.5 rounded border-gray-300 text-green-600"
+                    />
+                    {p.full_name}
+                    {p.position && <span className="text-gray-400">（{p.position}）</span>}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={handleConfirmMembers} disabled={savingPayment || selectedMembers.length === 0}
+                  className="px-3 py-1 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                  {savingPayment ? '設定中...' : `確定（${selectedMembers.length} 人）`}
+                </button>
+                <button onClick={() => setShowMemberPicker(false)}
+                  className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700">
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => {
+              setSelectedMembers(payments.map(p => p.member_id))
+              setShowMemberPicker(true)
+            }}
+              className="text-xs text-blue-600 hover:text-blue-700 underline">
+              揀需要付款嘅成員（{payments.length} 人已設定）
+            </button>
+          )}
+        </>
+      )}
+
+      {payments.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {payments.map(p => (
+            <div key={p.id} className="flex items-center justify-between text-xs py-1">
+              <span className="text-gray-700">{p.profiles?.full_name || '未知'}</span>
+              <div className="flex items-center gap-2">
+                {p.receipt_name && (
+                  <span className="text-green-500">📎 已上載單據</span>
+                )}
+                {p.status === 'paid' ? (
+                  <span className="flex items-center gap-0.5 text-green-600 font-medium">
+                    <CheckCircle className="w-3 h-3" /> 已付款
+                  </span>
+                ) : (
+                  <span className="text-amber-500">⏳ 未付款</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
