@@ -210,128 +210,119 @@ export default function PlanUploadForm({
         </div>
       )}
 
-      {/* ── 分析結果區 ── (v2 card-based) */}
+      {/* ── 分析結果區 ── 全新 rewrite */}
       {isAnalyzed && planAnalysis && (() => {
-        const sections = planAnalysis.split(/\n(?=## )/).filter(Boolean)
-        
-        // Separate: eval section (## ✅ 整體評價) vs detail sections
-        let evalSection = ''
-        const detailSections: string[] = []
-        for (const s of sections) {
-          if (s.includes('整體評價') || s.match(/##\s*[✅❌]/)) {
-            evalSection = s
-          } else {
-            detailSections.push(s)
+        // 1. Find eval section (lines with 評分/結果/改進)
+        const lines = planAnalysis.split('\n')
+        let evalContent = ''
+        let evalEndIdx = 0
+        for (let i = 0; i < lines.length; i++) {
+          evalContent += lines[i] + '\n'
+          if (lines[i].includes('改進建議') || (lines[i].includes('- ') && lines[i-1]?.includes('改進'))) {
+            // keep going to collect all suggestions
+          }
+          if (i > 0 && lines[i].startsWith('- ') && !lines[i+1]?.startsWith('- ')) {
+            // Last suggestion line found
+          }
+          // Stop at first emoji section header (after eval)
+          if (i > 0 && /^[📋👥⏱💰📦⚠️🎯]/.test(lines[i]) && evalContent.length > 50) {
+            evalEndIdx = i
+            evalContent = lines.slice(0, i).join('\n')
+            break
           }
         }
 
-        // Extract score from eval text
-        const scoreMatch = evalSection.match(/(\d+)(?:\/100|分)/)
-        const aiScore = scoreMatch ? parseInt(scoreMatch[1]) : (completeness?.score ?? 0)
-        const isGood = completeness?.is_complete ?? (aiScore >= 60)
-
-        // Icons & colors for detail cards
-        const cardStyle: Record<string, { icon: string; color: string; label: string }> = {
-          '📋': { icon: '📋', color: 'border-l-blue-500 bg-blue-50', label: '基本資訊' },
-          '👥': { icon: '👥', color: 'border-l-purple-500 bg-purple-50', label: '負責人員' },
-          '⏱': { icon: '⏱', color: 'border-l-amber-500 bg-amber-50', label: '活動流程' },
-          '💰': { icon: '💰', color: 'border-l-green-500 bg-green-50', label: '財務預算' },
-          '📦': { icon: '📦', color: 'border-l-teal-500 bg-teal-50', label: '物資清單' },
-          '⚠️': { icon: '⚠️', color: 'border-l-red-500 bg-red-50', label: '注意事項' },
-          '🎯': { icon: '🎯', color: 'border-l-orange-500 bg-orange-50', label: '活動目的' },
+        // 2. Split remaining into detail sections by emoji/## headers
+        const detailCards: { icon: string; content: string }[] = []
+        let currentIcon = ''
+        let currentContent = ''
+        for (let i = evalEndIdx; i < lines.length; i++) {
+          const line = lines[i]
+          const emojiMatch = line.match(/^[📋👥⏱💰📦⚠️🎯]/)
+          if (emojiMatch) {
+            if (currentIcon) {
+              detailCards.push({ icon: currentIcon, content: currentContent.trim() })
+            }
+            currentIcon = emojiMatch[0]
+            currentContent = line.replace(/^.[\s\S]*?\*\*(.+?)\*\*/, '') + '\n'
+          } else if (currentIcon) {
+            currentContent += line + '\n'
+          }
         }
+        if (currentIcon) {
+          detailCards.push({ icon: currentIcon, content: currentContent.trim() })
+        }
+
+        const cardColors: Record<string, { border: string; bg: string; label: string }> = {
+          '📋': { border: 'border-l-blue-500', bg: 'bg-blue-50', label: '基本資訊' },
+          '👥': { border: 'border-l-purple-500', bg: 'bg-purple-50', label: '負責人員' },
+          '⏱': { border: 'border-l-amber-500', bg: 'bg-amber-50', label: '活動流程' },
+          '💰': { border: 'border-l-green-500', bg: 'bg-green-50', label: '財務預算' },
+          '📦': { border: 'border-l-teal-500', bg: 'bg-teal-50', label: '物資清單' },
+          '⚠️': { border: 'border-l-red-500', bg: 'bg-red-50', label: '注意事項' },
+          '🎯': { border: 'border-l-orange-500', bg: 'bg-orange-50', label: '活動目的' },
+        }
+
+        const score = completeness?.score ?? 0
+        const passed = completeness?.is_complete ?? true
 
         return (
           <div className="mt-3 space-y-3">
-            {/* ═══ Evaluation Summary Card (大張、搶眼) ═══ */}
-            <div className={`rounded-xl border-2 shadow-sm overflow-hidden ${
-              isGood ? 'border-green-300' : 'border-red-300'
-            }`}>
-              {/* Score bar at top */}
-              <div className={`h-2 ${isGood ? 'bg-green-500' : 'bg-red-500'}`} />
-
-              <div className={`p-4 ${isGood ? 'bg-gradient-to-br from-green-50 to-white' : 'bg-gradient-to-br from-red-50 to-white'}`}>
+            {/* ═══ Eval Card ═══ */}
+            <div className={`rounded-xl border-2 shadow-sm overflow-hidden ${passed ? 'border-green-300' : 'border-red-300'}`}>
+              <div className={`h-2 ${passed ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className={`p-4 ${passed ? 'bg-gradient-to-br from-green-50 to-white' : 'bg-gradient-to-br from-red-50 to-white'}`}>
                 <div className="flex items-start gap-4">
-                  {/* Big circle with result */}
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl flex-shrink-0 shadow-sm ${
-                    isGood ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    {isGood ? '✅' : '❌'}
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl flex-shrink-0 shadow-sm ${passed ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {passed ? '✅' : '❌'}
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
                       <h4 className="text-base font-bold text-gray-900">
-                        {isGood ? '計劃書合格' : '計劃書需要修改'}
+                        {passed ? '計劃書合格' : '計劃書需要修改'}
                       </h4>
-                      <span className={`text-lg font-bold ${isGood ? 'text-green-600' : 'text-red-600'}`}>
-                        {aiScore}/100
-                      </span>
+                      <span className={`text-lg font-bold ${passed ? 'text-green-600' : 'text-red-600'}`}>{score}/100</span>
                     </div>
-
-                    {/* Progress bar */}
                     <div className="h-2.5 bg-gray-200 rounded-full mb-3 max-w-[200px]">
-                      <div className={`h-full rounded-full transition-all ${isGood ? 'bg-green-500' : 'bg-red-500'}`}
-                        style={{ width: `${aiScore}%` }} />
+                      <div className={`h-full rounded-full ${passed ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${score}%` }} />
                     </div>
-
-                    {/* Evaluation content */}
-                    {evalSection && (
-                      <div className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {evalSection
-                          .replace(/^## .+\n?/, '')
-                          .replace(/\*\*/g, '')
-                          .trim()}
-                      </div>
+                    {evalContent && (
+                      <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{evalContent}</div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Missing items + re-upload */}
-            {completeness && !completeness.is_complete && completeness.missing?.length > 0 && (
+            {/* Missing items */}
+            {!passed && (completeness?.missing?.length ?? 0) > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-xs font-medium text-red-700 mb-1.5">⚠️ 建議補充以下資料後重新上載：</p>
+                <p className="text-xs font-medium text-red-700 mb-1.5">⚠️ 缺少以下資料：</p>
                 <ul className="text-xs text-red-600 list-disc list-inside space-y-0.5 mb-2">
-                  {completeness.missing.map((item, i) => <li key={i}>{item}</li>)}
+                  {completeness?.missing?.map((item, i) => <li key={i}>{item}</li>)}
                 </ul>
                 <label className="inline-flex cursor-pointer items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
-                  <RefreshCw className="w-3 h-3" /> 重新上載計劃書
+                  <RefreshCw className="w-3 h-3" /> 重新上載
                   <input type="file" className="hidden" accept=".pdf,.doc,.docx,.txt" onChange={handleFileChange} />
                 </label>
               </div>
             )}
 
-            {/* ═══ Detail Section Cards ═══ */}
-            {detailSections.length > 0 && (
-              <div className="space-y-2">
-                {detailSections.map((sec, i) => {
-                  // Detect icon
-                  const iconMatch = sec.match(/^##\s*\*{0,2}([📋👥⏱💰📦⚠️🎯])/)
-                  const key = iconMatch?.[1] || ''
-                  const cfg = cardStyle[key] || { icon: '📝', color: 'border-l-gray-400 bg-gray-50', label: '其他' }
-                  
-                  // Clean content: remove ## header and leading/trailing whitespace
-                  let content = sec.replace(/^## .+\n?/, '').trim()
-                  
-                  // If content is empty after stripping, show something
-                  if (!content) content = '(未註明)'
-
-                  return (
-                    <div key={i} className={`rounded-lg border border-l-4 ${cfg.color.split(' ').slice(1).join(' ')} ${cfg.color.split(' ')[0].replace('border-l-', 'border-')} overflow-hidden`}>
-                      <div className={`px-3 py-2 flex items-center gap-2 border-b border-gray-100 ${cfg.color.split(' ').slice(1).join(' ')}`}>
-                        <span className="text-base">{cfg.icon}</span>
-                        <span className="text-xs font-semibold text-gray-800">{cfg.label}</span>
-                      </div>
-                      <div className="p-3 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
-                        {content}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            {/* ═══ Detail Cards ═══ */}
+            {detailCards.map((card, i) => {
+              const style = cardColors[card.icon] || { border: 'border-l-gray-400', bg: 'bg-gray-50', label: '其他' }
+              return (
+                <div key={i} className={`rounded-lg border ${style.border} ${style.bg.replace(style.bg, '')} overflow-hidden`}>
+                  <div className={`px-3 py-2 ${style.bg} border-b border-gray-100 flex items-center gap-2`}>
+                    <span className="text-base">{card.icon}</span>
+                    <span className="text-xs font-semibold text-gray-800">{style.label}</span>
+                  </div>
+                  <div className="p-3 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {card.content}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )
       })()}
