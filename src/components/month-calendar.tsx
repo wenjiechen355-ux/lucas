@@ -55,7 +55,8 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const hasAvatars = !!memberAvatars
 
   // ── React event handlers (no native DOM listeners) ──
-  function handlePointerDown(date: string) {
+  function handlePointerDown(e: React.PointerEvent, date: string) {
+    e.preventDefault()  // ← prevent implicit pointer capture → elementFromPoint works
     if (date < todayStr || (minDate && date < minDate) || (maxDate && date > maxDate)) return
     d.current = { start: date, hover: date, active: true, dragged: false }
     setDragVisual(date)
@@ -127,7 +128,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           const avatars = memberAvatars?.[ds] || []
           return (
             <div key={ds} data-date={ds}
-              onPointerDown={() => handlePointerDown(ds)}
+              onPointerDown={(e) => handlePointerDown(e, ds)}
               className={`rounded-md text-xs font-medium flex flex-col items-center justify-start pt-0.5 select-none ${hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'} ${
                 sel ? 'bg-green-500 text-white shadow-sm'
                 : inDrag ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
