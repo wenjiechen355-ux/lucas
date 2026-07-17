@@ -39,6 +39,7 @@ export default function PlanUploadForm({
   const [formatError, setFormatError] = useState('')
   const [showRawText, setShowRawText] = useState(false)
   const [showFormatted, setShowFormatted] = useState(false)
+  const [showDetails, setShowDetails] = useState(true)  // Analysis details toggle
 
   // Local state for instant UI update (no page refresh needed)
   const [localAnalysis, setLocalAnalysis] = useState<string | null>(null)
@@ -280,7 +281,7 @@ export default function PlanUploadForm({
 
         return (
           <div className="mt-3 space-y-3">
-            {/* ═══ Eval Card ═══ */}
+            {/* ═══ Eval Card (with collapse toggle) ═══ */}
             <div className={`rounded-xl border-2 shadow-sm overflow-hidden ${passed ? 'border-green-300' : 'border-red-300'}`}>
               <div className={`h-2 ${passed ? 'bg-green-500' : 'bg-red-500'}`} />
               <div className={`p-4 ${passed ? 'bg-gradient-to-br from-green-50 to-white' : 'bg-gradient-to-br from-red-50 to-white'}`}>
@@ -294,20 +295,40 @@ export default function PlanUploadForm({
                         {passed ? '計劃書合格' : '計劃書需要修改'}
                       </h4>
                       <span className={`text-lg font-bold ${passed ? 'text-green-600' : 'text-red-600'}`}>{score}/100</span>
+                      <button
+                        onClick={() => setShowDetails(!showDetails)}
+                        className={`ml-auto flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                          passed
+                            ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'
+                            : 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
+                        }`}
+                        title={showDetails ? '收埋詳細分析' : '展開詳細分析'}
+                      >
+                        {showDetails ? (
+                          <><ChevronUp className="w-3.5 h-3.5" /> 收埋</>
+                        ) : (
+                          <><ChevronDown className="w-3.5 h-3.5" /> 展開</>
+                        )}
+                      </button>
                     </div>
                     <div className="h-2.5 bg-gray-200 rounded-full mb-3 max-w-[200px]">
                       <div className={`h-full rounded-full ${passed ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${score}%` }} />
                     </div>
-                    {evalContent && (
+                    {evalContent && showDetails && (
                       <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{evalContent}</div>
+                    )}
+                    {!showDetails && detailCards.length > 0 && (
+                      <p className="text-xs text-gray-500 italic mt-1">
+                        （{detailCards.length} 個詳細分析已收埋）
+                      </p>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Missing items */}
-            {!passed && (completeness?.missing?.length ?? 0) > 0 && (
+            {/* Missing items — hidden when details collapsed */}
+            {showDetails && !passed && (completeness?.missing?.length ?? 0) > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                 <p className="text-xs font-medium text-red-700 mb-1.5">⚠️ 缺少以下資料：</p>
                 <ul className="text-xs text-red-600 list-disc list-inside space-y-0.5 mb-2">
@@ -320,8 +341,8 @@ export default function PlanUploadForm({
               </div>
             )}
 
-            {/* ═══ Detail Cards ═══ */}
-            {detailCards.map((card, i) => {
+            {/* ═══ Detail Cards — hidden when collapsed ═══ */}
+            {showDetails && detailCards.map((card, i) => {
               const style = cardColors[card.icon] || { border: 'border-l-gray-400', bg: 'bg-gray-50', label: '其他' }
               return (
                 <div key={i} className={`rounded-lg border ${style.border} ${style.bg.replace(style.bg, '')} overflow-hidden`}>
