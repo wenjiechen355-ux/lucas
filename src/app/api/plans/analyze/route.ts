@@ -84,6 +84,75 @@ async function analyzePlan(text: string): Promise<string | null> {
   }
 }
 
+// Completeness check — returns JSON: { is_complete, missing[], score }
+async function checkCompleteness(text: string): Promise<string | null> {
+  const apiKey = process.env.AGENDA_AI_API_KEY
+  if (!apiKey) return null
+
+  const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.silra.cn/v1/chat/completions'
+  const model = 'deepseek-chat'
+
+  const systemPrompt = `你係一個計劃書完整性檢查專家。請根據以下計劃書內容，逐一檢查以下項目係咪有提及。
+
+## 檢查項目：
+1. **基本資訊** — 活動名稱、日期、時間、地點
+2. **活動流程** — 逐項時間表 / 活動環節
+3. **負責人員** — 每個環節嘅負責人 / 組別分工
+4. **財務預算** — 收入 / 支出項目、預算金額
+5. **物資清單** — 需要嘅物資 / 器材
+
+## 輸出格式：
+只輸出以下 JSON，唔可以有其他文字：
+{
+  "is_complete": true/false,
+  "score": 0-100,
+  "items": {
+    "基本資訊": true/false,
+    "活動流程": true/false,
+    "負責人員": true/false,
+    "財務預算": true/false,
+    "物資清單": true/false
+  },
+  "missing": ["缺少嘅項目1", "缺少嘅項目2"],
+  "detail": "簡短說明邊啲唔夠完整"
+}`
+
+  try {
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `請檢查以下計劃書嘅完整性：\n\n${text}` },
+        ],
+        temperature: 0.1,
+        max_tokens: 1024,
+      }),
+    })
+
+    if (!res.ok) {
+      console.error('Completeness API error:', res.status, await res.text())
+      return null
+    }
+
+    const data = await res.json()
+    const content = data.choices?.[0]?.message?.content || null
+    if (!content) return null
+
+    // Try to extract JSON from response (in case it's wrapped in markdown code blocks)
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    return jsonMatch ? jsonMatch[0] : content
+  } catch (e) {
+    console.error('Completeness check failed:', e)
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -179,6 +248,12 @@ export async function POST(request: NextRequest) {
     updateData.plan_analyzed_at = new Date().toISOString()
   }
 
+  // Try completeness check
+  const completeness = await checkCompleteness(extractedText)
+  if (completeness) {
+    updateData.plan_completeness = completeness
+  }
+
   const { error: updateError } = await supabase
     .from('events')
     .update(updateData)
@@ -188,10 +263,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
+  // Parse completeness for response
+  let completenessData = null
+  if (completeness) {
+    try {
+      completenessData = JSON.parse(completeness)
+    } catch {}
+  }
+
   return NextResponse.json({
     success: true,
     status: updateData.plan_analysis_status,
     rawTextLength: extractedText.length,
     hasAnalysis: !!analysis,
+    completeness: completenessData,
   })
 }

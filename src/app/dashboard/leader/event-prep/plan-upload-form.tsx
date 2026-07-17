@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
+import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 
 interface Props {
   eventId: string
@@ -13,11 +13,20 @@ interface Props {
   planRawText?: string | null
   planAnalysis?: string | null
   planAnalysisStatus?: string | null
+  planCompleteness?: string | null
+}
+
+interface CompletenessData {
+  is_complete: boolean
+  score: number
+  items: Record<string, boolean>
+  missing: string[]
+  detail: string
 }
 
 export default function PlanUploadForm({
   eventId, currentPath, currentName,
-  planRawText, planAnalysis, planAnalysisStatus,
+  planRawText, planAnalysis, planAnalysisStatus, planCompleteness,
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -25,6 +34,7 @@ export default function PlanUploadForm({
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
   const [showRawText, setShowRawText] = useState(false)
+  const [completenessShown, setCompletenessShown] = useState(true)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -71,6 +81,14 @@ export default function PlanUploadForm({
     setAnalyzing(false)
   }
 
+  // Parse completeness JSON
+  let completeness: CompletenessData | null = null
+  if (planCompleteness) {
+    try {
+      completeness = JSON.parse(planCompleteness)
+    } catch {}
+  }
+
   // Get public URL for download
   const publicUrl = currentPath
     ? supabase.storage.from('documents').getPublicUrl(currentPath).data.publicUrl
@@ -80,6 +98,7 @@ export default function PlanUploadForm({
   const isAnalyzed = planAnalysisStatus === 'analyzed'
   const hasRawText = planAnalysisStatus === 'text_extracted'
   const canAnalyze = hasFile && planAnalysisStatus !== 'analyzed' && !analyzing
+  const isIncomplete = completeness && !completeness.is_complete
 
   return (
     <div className="flex-1">
@@ -123,6 +142,84 @@ export default function PlanUploadForm({
       {analysisError && (
         <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
           {analysisError}
+        </div>
+      )}
+
+      {/* Completeness Alert — show when incomplete */}
+      {isAnalyzed && isIncomplete && completeness && completenessShown && (
+        <div className="mt-3 bg-amber-50 border border-amber-300 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-amber-100 border-b border-amber-200 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-amber-700" />
+              <span className="text-xs font-semibold text-amber-800">計劃書完整性檢查</span>
+              <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-medium">
+                得分：{completeness.score}/100
+              </span>
+            </div>
+            <button onClick={() => setCompletenessShown(false)} className="text-amber-500 hover:text-amber-700 text-xs">收起</button>
+          </div>
+          <div className="p-3 space-y-2">
+            {/* Checklist */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {Object.entries(completeness.items || {}).map(([key, val]) => (
+                <div key={key} className={`flex items-center gap-1.5 text-xs ${val ? 'text-green-700' : 'text-red-700'}`}>
+                  {val ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                  )}
+                  <span>{key}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Missing items */}
+            {completeness.missing && completeness.missing.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+                <p className="text-xs font-medium text-red-700 mb-1">⚠️ 以下重要資料缺少或唔夠完整：</p>
+                <ul className="text-xs text-red-600 list-disc list-inside space-y-0.5">
+                  {completeness.missing.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-red-600">建議重新上載更完整嘅計劃書</span>
+                  <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
+                    <RefreshCw className="w-3 h-3" /> 重新上載
+                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.txt" onChange={handleFileChange} />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {completeness.detail && (
+              <p className="text-xs text-amber-700">{completeness.detail}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Completeness Pass — show when complete */}
+      {isAnalyzed && completeness && completeness.is_complete && completenessShown && (
+        <div className="mt-3 bg-green-50 border border-green-200 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-green-100 border-b border-green-200 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle className="w-4 h-4 text-green-700" />
+              <span className="text-xs font-semibold text-green-800">完整性檢查通過</span>
+              <span className="text-[10px] bg-green-200 text-green-800 px-1.5 py-0.5 rounded-full font-medium">
+                得分：{completeness.score}/100
+              </span>
+            </div>
+            <button onClick={() => setCompletenessShown(false)} className="text-green-500 hover:text-green-700 text-xs">收起</button>
+          </div>
+          <div className="p-3 grid grid-cols-2 gap-1.5">
+            {Object.entries(completeness.items || {}).map(([key, val]) => (
+              <div key={key} className="flex items-center gap-1.5 text-xs text-green-700">
+                <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                <span>{key}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
