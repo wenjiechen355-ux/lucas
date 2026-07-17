@@ -45,12 +45,16 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const today = new Date()
   const [viewMonth, setViewMonth] = useState(m ?? today.getMonth())
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
-  // Visual-only state for drag hover highlight
-  const [dragHoverState, setDragHoverState] = useState<string | null>(null)
-  // Refs for drag logic (avoid stale closure in pointer events)
+
+  // ── Visual rendering state ──
+  const [dragHoverVisual, setDragHoverVisual] = useState<string | null>(null)
+
+  // ── Refs: all drag logic uses refs → no stale closure ──
   const dragStartRef = useRef<string | null>(null)
+  const dragHoverRef = useRef<string | null>(null)  // <-- FIX: ref for hover, not state
   const isDraggingRef = useRef(false)
-  // Refs for callback deps (avoid stale closure in global listener)
+
+  // ── Refs for callback props (avoid stale closure in global handler) ──
   const selectedDatesRef = useRef(selectedDates)
   selectedDatesRef.current = selectedDates
   const onToggleDateRef = useRef(onToggleDate)
@@ -59,6 +63,8 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   minDateRef.current = minDate
   const maxDateRef = useRef(maxDate)
   maxDateRef.current = maxDate
+  const todayStrRef = useRef('')
+  todayStrRef.current = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
@@ -75,38 +81,31 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   }
 
   const dateStr = (d: number) => `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-  const isPast = (d: number) => dateStr(d) < todayStr
-  const isOutOfRange = (d: number, ds?: string) => {
-    const ds2 = ds || dateStr(d)
-    if (minDate && ds2 < minDate) return true
-    if (maxDate && ds2 > maxDate) return true
-    return false
-  }
 
-  // ── Global pointerup listener (avoids stale closure on each button) ──
+  // ── Global pointerup listener (注册一次，全部用 refs) ──
   useEffect(() => {
     function handleGlobalPointerUp() {
       if (!isDraggingRef.current) return
       const start = dragStartRef.current
-      const hoverState = dragHoverState
-      if (!start || !hoverState) {
+      const hoverEnd = dragHoverRef.current  // <-- FIX: read from ref, not state
+      if (!start || !hoverEnd) {
         isDraggingRef.current = false
         dragStartRef.current = null
-        setDragHoverState(null)
+        dragHoverRef.current = null
+        setDragHoverVisual(null)
         return
       }
 
-      const range = getDateRange(start, hoverState)
+      const range = getDateRange(start, hoverEnd)
       const curSelected = selectedDatesRef.current
       const toggle = onToggleDateRef.current
       const startSel = curSelected.includes(start)
+      const ts = todayStrRef.current
 
       range.forEach(date => {
-        const day = parseInt(date.split('-')[2])
-        const ds = date
-        if (ds < todayStr) return // skip past
-        if (minDateRef.current && ds < minDateRef.current) return // skip out of range
-        if (maxDateRef.current && ds > maxDateRef.current) return
+        if (date < ts) return
+        if (minDateRef.current && date < minDateRef.current) return
+        if (maxDateRef.current && date > maxDateRef.current) return
 
         if (startSel) {
           if (curSelected.includes(date)) toggle(date)
@@ -117,37 +116,40 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
 
       isDraggingRef.current = false
       dragStartRef.current = null
-      setDragHoverState(null)
+      dragHoverRef.current = null
+      setDragHoverVisual(null)
     }
 
     window.addEventListener('pointerup', handleGlobalPointerUp)
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp)
-  }, [dragHoverState, todayStr]) // only depends on visual state + stable values
+  }, []) // <-- FIX: empty deps, all values read from refs
 
-  // ── Single click handler (handled via refs to avoid stale closure) ──
   function handlePointerDown(date: string) {
-    const day = parseInt(date.split('-')[2])
     const ds = date
     if (ds < todayStr) return
     if (minDate && ds < minDate) return
     if (maxDate && ds > maxDate) return
 
+    // Set both ref AND visual state synchronously
     dragStartRef.current = date
+    dragHoverRef.current = date
     isDraggingRef.current = true
-    setDragHoverState(date)
+    setDragHoverVisual(date)
   }
 
   function handlePointerEnter(date: string) {
     if (!isDraggingRef.current) return
-    setDragHoverState(date)
+    dragHoverRef.current = date  // ref → immediately available to global handler
+    setDragHoverVisual(date)     // state → triggers visual re-render
   }
 
   const cells: (number | null)[] = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
-  const dragStartVal = dragStartRef.current
-  const dragRange = dragStartVal && dragHoverState ? getDateRange(dragStartVal, dragHoverState) : []
+  const dragRange = dragStartRef.current && dragHoverVisual
+    ? getDateRange(dragStartRef.current, dragHoverVisual)
+    : []
 
   return (
     <div
@@ -156,7 +158,8 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
         if (isDraggingRef.current) {
           isDraggingRef.current = false
           dragStartRef.current = null
-          setDragHoverState(null)
+          dragHoverRef.current = null
+          setDragHoverVisual(null)
         }
       }}
     >
@@ -185,8 +188,8 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           const ds = dateStr(d)
           const sel = selectedDates.includes(ds)
           const inDragRange = isDraggingRef.current && dragRange.includes(ds)
-          const past = isPast(d)
-          const outOfRange = isOutOfRange(d, ds)
+          const past = ds < todayStr
+          const outOfRange = !!((minDate && ds < minDate) || (maxDate && ds > maxDate))
           const disabled = past || outOfRange
           const isToday = ds === todayStr
           const avatars = memberAvatars?.[ds] || []
