@@ -35,7 +35,11 @@ function getDateRange(start: string, end: string): string[] {
   const dir = s <= e ? 1 : -1
   const cur = new Date(s)
   while (dir === 1 ? cur <= e : cur >= e) {
-    dates.push(cur.toISOString().slice(0, 10))
+    // Use local date to avoid UTC timezone offset issues (+8)
+    const y = cur.getFullYear()
+    const m = String(cur.getMonth() + 1).padStart(2, '0')
+    const d = String(cur.getDate()).padStart(2, '0')
+    dates.push(`${y}-${m}-${d}`)
     cur.setDate(cur.getDate() + dir)
   }
   return dates
