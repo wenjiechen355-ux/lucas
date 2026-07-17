@@ -61,13 +61,14 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const hasAvatars = !!memberAvatars
 
-  // ── Helper: find date string from pointer x,y using elementsFromPoint ──
+  // ── Helper: find date string from pointer x,y using getBoundingClientRect ──
   function dateFromPoint(x: number, y: number): string | null {
-    // elementsFromPoint returns ALL elements at this position (top→bottom)
-    const els = document.elementsFromPoint(x, y)
-    for (const el of els) {
-      if (el instanceof HTMLElement && el.hasAttribute('data-date')) {
-        return el.getAttribute('data-date')
+    // Query ALL [data-date] elements in the grid
+    const cells = document.querySelectorAll('[data-date]')
+    for (const cell of cells) {
+      const r = cell.getBoundingClientRect()
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        return cell.getAttribute('data-date')
       }
     }
     return null
