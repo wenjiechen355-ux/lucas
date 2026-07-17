@@ -78,17 +78,26 @@ async function analyzePlan(text: string): Promise<string | null> {
           { role: 'user', content: `請分析以下活動計劃書：\n\n${text}` },
         ],
         temperature: 0.3,
-        max_tokens: 4096,
+        max_tokens: 8192,
       }),
     })
 
     if (!res.ok) {
-      console.error('AI API error:', res.status, await res.text())
+      const errText = await res.text()
+      console.error('AI API error:', res.status, errText)
       return null
     }
 
     const data = await res.json()
-    return data.choices?.[0]?.message?.content || null
+    const content = data.choices?.[0]?.message?.content || null
+    const finishReason = data.choices?.[0]?.finish_reason
+    const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens || 0
+    console.log(`[AI Analyze] finish=${finishReason}, reasoning=${reasoningTokens}, content_len=${content?.length || 0}`)
+    if (finishReason === 'length' && (!content || content.length < 50)) {
+      console.error('[AI Analyze] Truncated by length, content too short')
+      return null
+    }
+    return content
   } catch (e) {
     console.error('AI analysis failed:', e)
     return null
@@ -142,17 +151,20 @@ async function checkCompleteness(text: string): Promise<string | null> {
           { role: 'user', content: `請檢查以下計劃書嘅完整性：\n\n${text}` },
         ],
         temperature: 0.1,
-        max_tokens: 1024,
+        max_tokens: 8192,
       }),
     })
 
     if (!res.ok) {
-      console.error('Completeness API error:', res.status, await res.text())
+      const errText = await res.text()
+      console.error('Completeness API error:', res.status, errText)
       return null
     }
 
     const data = await res.json()
     const content = data.choices?.[0]?.message?.content || null
+    const finishReason = data.choices?.[0]?.finish_reason
+    console.log(`[Completeness] finish=${finishReason}, content_len=${content?.length || 0}`)
     if (!content) return null
 
     // Try to extract JSON from response (in case it's wrapped in markdown code blocks)
@@ -257,12 +269,16 @@ export async function POST(request: NextRequest) {
     updateData.plan_analysis = analysis
     updateData.plan_analysis_status = 'analyzed'
     updateData.plan_analyzed_at = new Date().toISOString()
+  } else {
+    console.warn('[Analyze] AI analysis returned null, status will stay text_extracted')
   }
 
   // Try completeness check
   const completeness = await checkCompleteness(extractedText)
   if (completeness) {
     updateData.plan_completeness = completeness
+  } else {
+    console.warn('[Analyze] Completeness check returned null')
   }
 
   const { error: updateError } = await supabase
@@ -287,6 +303,12 @@ export async function POST(request: NextRequest) {
     status: updateData.plan_analysis_status,
     rawTextLength: extractedText.length,
     hasAnalysis: !!analysis,
+    hasCompleteness: !!completeness,
+    analysisLength: analysis?.length || 0,
     completeness: completenessData,
+    debug: {
+      apiKeySet: !!process.env.AGENDA_AI_API_KEY,
+      apiUrl: process.env.AGENDA_AI_API_URL,
+    },
   })
 }
