@@ -347,6 +347,7 @@ export async function POST(request: NextRequest) {
     hasAnalysis: !!analysis,
     hasCompleteness: !!completeness,
     analysisLength: analysis?.length || 0,
+    analysis,   // ← return content for instant UI update
     completeness: completenessData,
   })
 }

@@ -29,7 +29,7 @@ export default function PlanUploadForm({
   eventId, currentPath, currentName,
   planRawText, planAnalysis, planAnalysisStatus, planCompleteness, planFormatted,
 }: Props) {
-  // VERSION: 2026-07-17-v3-card-layout
+  // VERSION: 2026-07-17-v4-instant-local
   const router = useRouter()
   const supabase = createClient()
   const [uploading, setUploading] = useState(false)
@@ -39,6 +39,15 @@ export default function PlanUploadForm({
   const [formatError, setFormatError] = useState('')
   const [showRawText, setShowRawText] = useState(false)
   const [showFormatted, setShowFormatted] = useState(false)
+
+  // Local state for instant UI update (no page refresh needed)
+  const [localAnalysis, setLocalAnalysis] = useState<string | null>(null)
+  const [localCompletenessJson, setLocalCompletenessJson] = useState<string | null>(null)
+
+  // Use local data if available (instant), otherwise fall back to server props
+  const displayAnalysis = localAnalysis ?? planAnalysis
+  const displayCompletenessStr = localCompletenessJson ?? planCompleteness
+  const displayStatus = localAnalysis ? 'analyzed' : (planAnalysisStatus || 'none')
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -75,7 +84,10 @@ export default function PlanUploadForm({
       })
       const data = await res.json()
       if (res.ok) {
-        router.refresh()
+        // Instant UI update — no page refresh needed
+        if (data.analysis) setLocalAnalysis(data.analysis)
+        if (data.completeness) setLocalCompletenessJson(JSON.stringify(data.completeness))
+        setAnalyzing(false)
         return
       } else {
         setAnalysisError(data.error || '分析失敗')
@@ -109,11 +121,11 @@ export default function PlanUploadForm({
     setFormatting(false)
   }
 
-  // Parse completeness JSON
+  // Parse completeness JSON (use display value = local overrides props)
   let completeness: CompletenessData | null = null
-  if (planCompleteness) {
+  if (displayCompletenessStr) {
     try {
-      completeness = JSON.parse(planCompleteness)
+      completeness = JSON.parse(displayCompletenessStr)
     } catch {}
   }
 
@@ -123,8 +135,8 @@ export default function PlanUploadForm({
     : null
 
   const hasFile = !!(currentPath && currentName)
-  const isAnalyzed = planAnalysisStatus === 'analyzed'
-  const hasRawText = planAnalysisStatus === 'text_extracted'
+  const isAnalyzed = displayStatus === 'analyzed'
+  const hasRawText = displayStatus === 'text_extracted' && !isAnalyzed
   const hasFormatted = !!planFormatted
 
   return (
@@ -153,18 +165,18 @@ export default function PlanUploadForm({
         {hasFile && (
           <button
             onClick={handleAnalyze}
-            disabled={analyzing || planAnalysisStatus === 'analyzed'}
+            disabled={analyzing || isAnalyzed}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
               analyzing
                 ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-wait'
-                : planAnalysisStatus === 'analyzed'
+                : isAnalyzed
                   ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
                   : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
             }`}
           >
             {analyzing ? (
               <><Loader2 className="w-3 h-3 animate-spin" /> 分析中...</>
-            ) : planAnalysisStatus === 'analyzed' ? (
+            ) : isAnalyzed ? (
               <><CheckCircle className="w-3 h-3" /> 已分析</>
             ) : (
               <><Sparkles className="w-3 h-3" /> AI 分析計劃書</>
@@ -211,9 +223,9 @@ export default function PlanUploadForm({
       )}
 
       {/* ── 分析結果區 ── 全新 rewrite */}
-      {isAnalyzed && planAnalysis && (() => {
+      {isAnalyzed && displayAnalysis && (() => {
         // 1. Find eval section (lines with 評分/結果/改進)
-        const lines = planAnalysis.split('\n')
+        const lines = displayAnalysis.split('\n')
         let evalContent = ''
         let evalEndIdx = 0
         for (let i = 0; i < lines.length; i++) {
