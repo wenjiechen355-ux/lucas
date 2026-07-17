@@ -7,6 +7,7 @@ import { Plus, ClipboardList, User, Calendar, MapPin, MoreHorizontal, CheckCircl
 import PlanUploadForm from './plan-upload-form'
 import EventDocUpload from './event-doc-upload'
 import EventTransactions from '@/components/event-transactions'
+import EventPhotos from '@/components/event-photos'
 import ReviewerSelector from '@/components/reviewer-selector'
 import MemberReminder, { type MemberStatus } from '@/components/member-reminder'
 
@@ -696,16 +697,8 @@ export default function EventPrepPage() {
                       currentName={event.finance_doc_name}
                     />
                   </div>
-                  <div className="px-5 py-3 flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                      <Camera className="w-4 h-4 text-blue-600" /> 有關相片繳交
-                    </span>
-                    <EventDocUpload
-                      eventId={event.id}
-                      docType="photo"
-                      currentPath={event.photo_doc_path}
-                      currentName={event.photo_doc_name}
-                    />
+                  <div className="px-5 py-3">
+                    <EventPhotos eventId={event.id} />
                   </div>
                 </div>
               )}

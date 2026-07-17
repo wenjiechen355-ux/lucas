@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Database, Calendar, MapPin, FileText, DollarSign, Camera, Download, Search, RefreshCw, Edit3, TrendingUp, CheckCircle, XCircle, Clock, Upload } from 'lucide-react'
+import EventPhotos from '@/components/event-photos'
 
 interface EventData {
   id: string
@@ -193,7 +194,9 @@ export default function EventArchivePage() {
                     <DocRow icon={FileText} label="計劃書" path={event.plan_doc_path} name={event.plan_doc_name} getUrl={getPublicUrl} />
                     {event.is_meeting && <DocRow icon={Edit3} label="會議記錄" path={event.minutes_doc_path} name={event.minutes_doc_name} getUrl={getPublicUrl} iconColor="text-purple-500" />}
                     <DocRow icon={DollarSign} label="財務報告" path={event.finance_doc_path} name={event.finance_doc_name} getUrl={getPublicUrl} iconColor="text-green-500" />
-                    <DocRow icon={Camera} label="活動相片" path={event.photo_doc_path} name={event.photo_doc_name} getUrl={getPublicUrl} iconColor="text-blue-500" />
+                  </div>
+                  <div className="px-5 py-3 border-t border-gray-100">
+                    <EventPhotos eventId={event.id} />
                   </div>
                 </div>
               ))}

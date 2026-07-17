@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Camera, Upload, X, Loader2, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Camera, Upload, X, Loader2, Trash2, ImageIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Photo {
@@ -16,17 +16,23 @@ interface Photo {
 export default function EventPhotos({ eventId }: { eventId: string }) {
   const supabase = createClient()
   const [photos, setPhotos] = useState<Photo[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [caption, setCaption] = useState('')
 
-  // Load photos
-  useState(() => {
+  useEffect(() => {
+    let cancelled = false
     setLoading(true)
     supabase.from('event_photos').select('*').eq('event_id', eventId).order('created_at', { ascending: false })
-      .then(({ data }) => { if (data) setPhotos(data); setLoading(false) })
-  })
+      .then(({ data }) => {
+        if (!cancelled) {
+          if (data) setPhotos(data)
+          setLoading(false)
+        }
+      })
+    return () => { cancelled = true }
+  }, [eventId])
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault()
@@ -45,7 +51,6 @@ export default function EventPhotos({ eventId }: { eventId: string }) {
     const data = await res.json()
     if (data.results) {
       alert(`上載完成：${data.results.filter((r: any) => r.ok).length} / ${data.results.length} 張`)
-      // Reload
       const { data: fresh } = await supabase.from('event_photos').select('*').eq('event_id', eventId).order('created_at', { ascending: false })
       if (fresh) setPhotos(fresh)
       input.value = ''
@@ -61,6 +66,14 @@ export default function EventPhotos({ eventId }: { eventId: string }) {
     if (!confirm('刪除此相片？')) return
     await supabase.from('event_photos').delete().eq('id', id)
     setPhotos(photos.filter(p => p.id !== id))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-6 text-gray-400 text-xs">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" /> 載入中...
+      </div>
+    )
   }
 
   return (
@@ -92,8 +105,8 @@ export default function EventPhotos({ eventId }: { eventId: string }) {
 
       {/* Photo Grid */}
       {photos.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <Camera className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+        <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
+          <ImageIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
           <p className="text-sm text-gray-400">未有活動相片</p>
         </div>
       ) : (
