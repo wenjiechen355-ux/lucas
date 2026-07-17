@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp, CheckCircle, XCircle, RefreshCw, FileOutput } from 'lucide-react'
+import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp, CheckCircle, XCircle, RefreshCw, FileOutput, X } from 'lucide-react'
 
 interface Props {
   eventId: string
@@ -40,6 +40,7 @@ export default function PlanUploadForm({
   const [showRawText, setShowRawText] = useState(false)
   const [showFormatted, setShowFormatted] = useState(false)
   const [showDetails, setShowDetails] = useState(true)  // Analysis details toggle
+  const [analysisDismissed, setAnalysisDismissed] = useState(false)  // Hide entire analysis block
 
   // Local state for instant UI update (no page refresh needed)
   const [localAnalysis, setLocalAnalysis] = useState<string | null>(null)
@@ -185,6 +186,16 @@ export default function PlanUploadForm({
           </button>
         )}
 
+        {/* Show analysis again — only when dismissed */}
+        {isAnalyzed && analysisDismissed && (
+          <button
+            onClick={() => setAnalysisDismissed(false)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+          >
+            <Sparkles className="w-3 h-3" /> 顯示分析結果
+          </button>
+        )}
+
         {/* AI Format Button — visible when file uploaded */}
         {hasFile && (
           <button
@@ -224,7 +235,7 @@ export default function PlanUploadForm({
       )}
 
       {/* ── 分析結果區 ── 全新 rewrite */}
-      {isAnalyzed && displayAnalysis && (() => {
+      {isAnalyzed && displayAnalysis && !analysisDismissed && (() => {
         // 1. Find eval section (lines with 評分/結果/改進)
         const lines = displayAnalysis.split('\n')
         let evalContent = ''
@@ -309,6 +320,17 @@ export default function PlanUploadForm({
                         ) : (
                           <><ChevronDown className="w-3.5 h-3.5" /> 展開</>
                         )}
+                      </button>
+                      <button
+                        onClick={() => setAnalysisDismissed(true)}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                          passed
+                            ? 'hover:bg-green-200 text-green-600'
+                            : 'hover:bg-red-200 text-red-600'
+                        }`}
+                        title="關閉分析結果"
+                      >
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="h-2.5 bg-gray-200 rounded-full mb-3 max-w-[200px]">
