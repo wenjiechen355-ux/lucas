@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface MonthCalendarProps {
@@ -17,9 +17,9 @@ const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','
 const DAYS = ['日','一','二','三','四','五','六']
 
 const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-amber-500',
-  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500',
-  'bg-cyan-500', 'bg-orange-500', 'bg-lime-500', 'bg-violet-500',
+  'bg-blue-500','bg-green-500','bg-purple-500','bg-amber-500',
+  'bg-pink-500','bg-teal-500','bg-indigo-500','bg-rose-500',
+  'bg-cyan-500','bg-orange-500','bg-lime-500','bg-violet-500',
 ]
 
 function getAvatarColor(name: string): string {
@@ -30,8 +30,7 @@ function getAvatarColor(name: string): string {
 
 function getDateRange(start: string, end: string): string[] {
   const dates: string[] = []
-  const s = new Date(start + 'T00:00:00')
-  const e = new Date(end + 'T00:00:00')
+  const s = new Date(start + 'T00:00:00'), e = new Date(end + 'T00:00:00')
   const dir = s <= e ? 1 : -1
   const cur = new Date(s)
   while (dir === 1 ? cur <= e : cur >= e) {
@@ -46,119 +45,111 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
   const [viewMonth, setViewMonth] = useState(m ?? today.getMonth())
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
-  const [dragHoverVisual, setDragHoverVisual] = useState<string | null>(null)
-  const calendarRef = useRef<HTMLDivElement>(null)
+  const [dragVisual, setDragVisual] = useState<string | null>(null)
 
-  // ── All mutable state in a single ref object (zero stale closures) ──
-  const st = useRef({
-    start: null as string | null,
-    hover: null as string | null,
-    active: false,
-    dragged: false,
-  })
+  // All drag state in refs — zero closures
+  const d = useRef({ start: null as string | null, hover: null as string | null, active: false, dragged: false })
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const hasAvatars = !!memberAvatars
 
-  // ── Helper: find date string from pointer x,y using getBoundingClientRect ──
-  function dateFromPoint(x: number, y: number): string | null {
-    // Query ALL [data-date] elements in the grid
-    const cells = document.querySelectorAll('[data-date]')
-    for (const cell of cells) {
-      const r = cell.getBoundingClientRect()
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-        return cell.getAttribute('data-date')
-      }
-    }
-    return null
+  // ── React event handlers (no native DOM listeners) ──
+  function handlePointerDown(date: string) {
+    if (date < todayStr || (minDate && date < minDate) || (maxDate && date > maxDate)) return
+    d.current = { start: date, hover: date, active: true, dragged: false }
+    setDragVisual(date)
   }
 
-  // ── Native DOM pointer events ──
-  useEffect(() => {
-    const cal = calendarRef.current
-    if (!cal) return
+  function handlePointerMove(e: React.PointerEvent) {
+    if (!d.current.active) return
+    // Use elementFromPoint to find what's under the pointer
+    const el = document.elementFromPoint(e.clientX, e.clientY)
+    if (!el) return
+    const dateEl = (el as HTMLElement).closest('[data-date]') as HTMLElement | null
+    if (!dateEl) return
+    const ds = dateEl.getAttribute('data-date')
+    if (!ds || ds === d.current.hover) return
+    d.current.hover = ds
+    if (ds !== d.current.start) d.current.dragged = true
+    setDragVisual(ds)
+  }
 
-    function onDown(e: PointerEvent) {
-      const ds = dateFromPoint(e.clientX, e.clientY)
-      if (!ds) return
-      if (ds < todayStr) return
-      if (minDate && ds < minDate) return
-      if (maxDate && ds > maxDate) return
+  function handlePointerUp() {
+    if (!d.current.active) return
+    const { start, hover, dragged } = d.current
+    d.current = { start: null, hover: null, active: false, dragged: false }
+    setDragVisual(null)
+    if (!start || !hover) return
+    if (!dragged) { onToggleDate(start); return }
+    const range = getDateRange(start, hover)
+    const startSel = selectedDates.includes(start)
+    range.forEach(ds => {
+      if (ds < todayStr || (minDate && ds < minDate) || (maxDate && ds > maxDate)) return
+      if (startSel ? selectedDates.includes(ds) : !selectedDates.includes(ds)) onToggleDate(ds)
+    })
+  }
 
-      st.current.start = ds
-      st.current.hover = ds
-      st.current.active = true
-      st.current.dragged = false
-      setDragHoverVisual(ds)
-      e.preventDefault()
-    }
+  function dateStr(d: number) { return `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
 
-    function onMove(e: PointerEvent) {
-      if (!st.current.active) return
+  const cells: (number | null)[] = []
+  for (let i = 0; i < firstDay; i++) cells.push(null)
+  for (let d2 = 1; d2 <= daysInMonth; d2++) cells.push(d2)
 
-      const ds = dateFromPoint(e.clientX, e.clientY)
-      if (!ds || ds === st.current.hover) return
+  const dragRange = d.current.start && dragVisual ? getDateRange(d.current.start, dragVisual) : []
 
-      st.current.hover = ds
-      if (ds !== st.current.start) {
-        st.current.dragged = true
-      }
-      setDragHoverVisual(ds)
-    }
-
-    function onEnd() {
-      if (!st.current.active) return
-      const { start, hover, dragged } = st.current
-      st.current.active = false
-      st.current.start = null
-      st.current.hover = null
-      st.current.dragged = false
-      setDragHoverVisual(null)
-
-      if (!start || !hover) return
-
-      if (!dragged) {
-        // Single click
-        onToggleDate(start)
-        return
-      }
-
-      // Drag
-      const range = getDateRange(start, hover)
-      const toggle = onToggleDate
-      const startSel = selectedDates.includes(start)
-
-      range.forEach(d => {
-        if (d < todayStr) return
-        if (minDate && d < minDate) return
-        if (maxDate && d > maxDate) return
-        if (startSel) { if (selectedDates.includes(d)) toggle(d) }
-        else { if (!selectedDates.includes(d)) toggle(d) }
-      })
-    }
-
-    function onCancel() {
-      if (!st.current.active) return
-      st.current.active = false
-      st.current.start = null
-      st.current.hover = null
-      st.current.dragged = false
-      setDragHoverVisual(null)
-    }
-
-    cal.addEventListener('pointerdown', onDown)
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onEnd)
-    window.addEventListener('pointercancel', onCancel)
-
-    return () => {
-      cal.removeEventListener('pointerdown', onDown)
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onEnd)
-      window.removeEventListener('pointercancel', onCancel)
-    }
-  }, [viewMonth, viewYear, todayStr, minDate, maxDate, selectedDates, onToggleDate])
+  return (
+    <div
+      className="select-none"
+      style={{ touchAction: 'none', userSelect: 'none' }}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => { d.current = { start: null, hover: null, active: false, dragged: false }; setDragVisual(null) }}
+      onMouseLeave={() => { if (d.current.active) { d.current = { start: null, hover: null, active: false, dragged: false }; setDragVisual(null) }}}
+    >
+      {/* Month nav */}
+      <div className="flex items-center justify-between mb-2">
+        <button type="button" onClick={prevMonth} className="p-1 text-gray-400 hover:text-gray-600"><ChevronLeft className="w-4 h-4" /></button>
+        <span className="text-sm font-medium text-gray-700">{viewYear}年 {MONTHS[viewMonth]}</span>
+        <button type="button" onClick={nextMonth} className="p-1 text-gray-400 hover:text-gray-600"><ChevronRight className="w-4 h-4" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {DAYS.map(d2 => (<div key={d2} className="text-center text-[10px] text-gray-400 py-1">{d2}</div>))}
+      </div>
+      <div className={`grid grid-cols-7 gap-1 ${hasAvatars ? '' : 'gap-0.5'}`}>
+        {cells.map((d2, i) => {
+          if (d2 === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
+          const ds = dateStr(d2)
+          const sel = selectedDates.includes(ds)
+          const inDrag = d.current.active && dragRange.includes(ds)
+          const disabled = ds < todayStr || !!((minDate && ds < minDate) || (maxDate && ds > maxDate))
+          const isToday = ds === todayStr
+          const avatars = memberAvatars?.[ds] || []
+          return (
+            <div key={ds} data-date={ds}
+              onPointerDown={() => handlePointerDown(ds)}
+              className={`rounded-md text-xs font-medium flex flex-col items-center justify-start pt-0.5 select-none ${hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'} ${
+                sel ? 'bg-green-500 text-white shadow-sm'
+                : inDrag ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
+                : isToday && !disabled ? 'bg-green-50 text-green-700 ring-1 ring-green-300'
+                : disabled ? 'text-gray-200'
+                : 'text-gray-600 cursor-pointer hover:bg-gray-100'
+              }`}>
+              <span className="pointer-events-none">{d2}</span>
+              {hasAvatars && avatars.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-0.5 mt-1 pb-0.5 pointer-events-none">
+                  {avatars.slice(0,6).map((n,ai) => (
+                    <span key={ai} className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[8px] font-bold text-white ${getAvatarColor(n)}`} title={n}>{n.charAt(0)}</span>
+                  ))}
+                  {avatars.length > 6 && <span className="text-[8px] text-gray-400">+{avatars.length-6}</span>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1) }
@@ -168,95 +159,4 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
     if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1) }
     else setViewMonth(viewMonth + 1)
   }
-
-  const dateStr = (d: number) => `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-
-  const cells: (number | null)[] = []
-  for (let i = 0; i < firstDay; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-
-  const dragRange = st.current.start && dragHoverVisual
-    ? getDateRange(st.current.start, dragHoverVisual)
-    : []
-
-  return (
-    <div
-      ref={calendarRef}
-      className="select-none"
-      style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-    >
-      {/* Month nav */}
-      <div className="flex items-center justify-between mb-2">
-        <button type="button" onPointerDown={e => e.stopPropagation()} onClick={prevMonth} className="p-1 text-gray-400 hover:text-gray-600">
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <span className="text-sm font-medium text-gray-700">{viewYear}年 {MONTHS[viewMonth]}</span>
-        <button type="button" onPointerDown={e => e.stopPropagation()} onClick={nextMonth} className="p-1 text-gray-400 hover:text-gray-600">
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Day headers */}
-      <div className="grid grid-cols-7 gap-1 mb-1">
-        {DAYS.map(d => (
-          <div key={d} className="text-center text-[10px] text-gray-400 py-1">{d}</div>
-        ))}
-      </div>
-
-      {/* Date grid */}
-      <div className={`grid grid-cols-7 gap-1 ${hasAvatars ? '' : 'gap-0.5'}`}>
-        {cells.map((d, i) => {
-          if (d === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
-          const ds = dateStr(d)
-          const sel = selectedDates.includes(ds)
-          const inDragRange = st.current.active && dragRange.includes(ds)
-          const past = ds < todayStr
-          const outOfRange = !!((minDate && ds < minDate) || (maxDate && ds > maxDate))
-          const disabled = past || outOfRange
-          const isToday = ds === todayStr
-          const avatars = memberAvatars?.[ds] || []
-
-          return (
-            <div
-              key={ds}
-              data-date={ds}
-              className={`rounded-md text-xs font-medium flex flex-col items-center justify-start pt-0.5 select-none ${
-                hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'
-              } ${
-                sel
-                  ? 'bg-green-500 text-white shadow-sm'
-                  : inDragRange
-                    ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
-                    : isToday && !outOfRange
-                      ? 'bg-green-50 text-green-700 ring-1 ring-green-300'
-                      : outOfRange
-                        ? 'text-red-200 bg-red-50/30'
-                        : past
-                          ? 'text-gray-200'
-                          : 'text-gray-600 cursor-pointer hover:bg-gray-100'
-              }`}
-            >
-              <span className="pointer-events-none">{d}</span>
-              {hasAvatars && avatars.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-0.5 mt-1 pb-0.5 pointer-events-none">
-                  {avatars.slice(0, 6).map((name, ai) => (
-                    <span
-                      key={ai}
-                      className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[8px] font-bold text-white ${getAvatarColor(name)}`}
-                      title={name}
-                    >
-                      {name.charAt(0)}
-                    </span>
-                  ))}
-                  {avatars.length > 6 && (
-                    <span className="text-[8px] text-gray-400">+{avatars.length - 6}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
 }
