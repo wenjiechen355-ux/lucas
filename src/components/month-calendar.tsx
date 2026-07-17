@@ -51,8 +51,9 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
 
   // ── Refs: all drag logic uses refs → no stale closure ──
   const dragStartRef = useRef<string | null>(null)
-  const dragHoverRef = useRef<string | null>(null)  // <-- FIX: ref for hover, not state
+  const dragHoverRef = useRef<string | null>(null)
   const isDraggingRef = useRef(false)
+  const dragActivatedRef = useRef(false) // true = actually entered different date
 
   // ── Refs for callback props (avoid stale closure in global handler) ──
   const selectedDatesRef = useRef(selectedDates)
@@ -82,20 +83,34 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
 
   const dateStr = (d: number) => `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
 
-  // ── Global pointerup listener (注册一次，全部用 refs) ──
+  // ── Global pointerup listener ──
   useEffect(() => {
     function handleGlobalPointerUp() {
       if (!isDraggingRef.current) return
       const start = dragStartRef.current
-      const hoverEnd = dragHoverRef.current  // <-- FIX: read from ref, not state
+      const hoverEnd = dragHoverRef.current
+
       if (!start || !hoverEnd) {
         isDraggingRef.current = false
         dragStartRef.current = null
         dragHoverRef.current = null
+        dragActivatedRef.current = false
         setDragHoverVisual(null)
         return
       }
 
+      // Single click: no drag activation → toggle only the clicked date
+      if (!dragActivatedRef.current) {
+        onToggleDateRef.current(start)
+        isDraggingRef.current = false
+        dragStartRef.current = null
+        dragHoverRef.current = null
+        dragActivatedRef.current = false
+        setDragHoverVisual(null)
+        return
+      }
+
+      // Drag: toggle the entire range
       const range = getDateRange(start, hoverEnd)
       const curSelected = selectedDatesRef.current
       const toggle = onToggleDateRef.current
@@ -117,12 +132,13 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
       isDraggingRef.current = false
       dragStartRef.current = null
       dragHoverRef.current = null
+      dragActivatedRef.current = false
       setDragHoverVisual(null)
     }
 
     window.addEventListener('pointerup', handleGlobalPointerUp)
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp)
-  }, []) // <-- FIX: empty deps, all values read from refs
+  }, [])
 
   function handlePointerDown(date: string) {
     const ds = date
@@ -139,8 +155,11 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
 
   function handlePointerEnter(date: string) {
     if (!isDraggingRef.current) return
-    dragHoverRef.current = date  // ref → immediately available to global handler
-    setDragHoverVisual(date)     // state → triggers visual re-render
+    if (date !== dragStartRef.current) {
+      dragActivatedRef.current = true // 真正開始拖拽
+    }
+    dragHoverRef.current = date
+    setDragHoverVisual(date)
   }
 
   const cells: (number | null)[] = []
@@ -159,6 +178,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           isDraggingRef.current = false
           dragStartRef.current = null
           dragHoverRef.current = null
+          dragActivatedRef.current = false
           setDragHoverVisual(null)
         }
       }}
