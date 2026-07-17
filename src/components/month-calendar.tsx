@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface MonthCalendarProps {
@@ -47,49 +47,86 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
   const [dragVisual, setDragVisual] = useState<string | null>(null)
 
-  // All drag state in refs — zero closures
-  const d = useRef({ start: null as string | null, hover: null as string | null, active: false, dragged: false })
+  // ── All mutable state in refs (zero stale closures) ──
+  const dragRef = useRef({ start: null as string | null, hover: null as string | null, active: false, dragged: false })
+  const onToggleRef = useRef(onToggleDate)
+  const selectedRef = useRef(selectedDates)
+  const minRef = useRef(minDate)
+  const maxRef = useRef(maxDate)
+  const todayRef = useRef(todayStr)
+  // Keep refs updated
+  onToggleRef.current = onToggleDate
+  selectedRef.current = selectedDates
+  minRef.current = minDate
+  maxRef.current = maxDate
+  todayRef.current = todayStr
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const hasAvatars = !!memberAvatars
 
-  // ── React event handlers (no native DOM listeners) ──
-  function handlePointerDown(e: React.PointerEvent, date: string) {
-    e.preventDefault()  // ← prevent implicit pointer capture → elementFromPoint works
-    if (date < todayStr || (minDate && date < minDate) || (maxDate && date > maxDate)) return
-    d.current = { start: date, hover: date, active: true, dragged: false }
-    setDragVisual(date)
-  }
+  // ── Native window-level events (avoids all React delegation + capture quirks) ──
+  useEffect(() => {
+    function onDown(e: PointerEvent) {
+      const target = (e.target as HTMLElement).closest('[data-date]') as HTMLElement | null
+      if (!target) return
+      const ds = target.getAttribute('data-date')
+      if (!ds) return
+      const now = todayRef.current
+      if (ds < now || (minRef.current && ds < minRef.current) || (maxRef.current && ds > maxRef.current)) return
 
-  function handlePointerMove(e: React.PointerEvent) {
-    if (!d.current.active) return
-    // Use elementFromPoint to find what's under the pointer
-    const el = document.elementFromPoint(e.clientX, e.clientY)
-    if (!el) return
-    const dateEl = (el as HTMLElement).closest('[data-date]') as HTMLElement | null
-    if (!dateEl) return
-    const ds = dateEl.getAttribute('data-date')
-    if (!ds || ds === d.current.hover) return
-    d.current.hover = ds
-    if (ds !== d.current.start) d.current.dragged = true
-    setDragVisual(ds)
-  }
+      // KEY FIX: Release implicit pointer capture so elementFromPoint in onMove
+      // returns the actual element under the pointer, not the captured one
+      ;(e.target as HTMLElement).releasePointerCapture?.(e.pointerId)
+      e.preventDefault()
 
-  function handlePointerUp() {
-    if (!d.current.active) return
-    const { start, hover, dragged } = d.current
-    d.current = { start: null, hover: null, active: false, dragged: false }
-    setDragVisual(null)
-    if (!start || !hover) return
-    if (!dragged) { onToggleDate(start); return }
-    const range = getDateRange(start, hover)
-    const startSel = selectedDates.includes(start)
-    range.forEach(ds => {
-      if (ds < todayStr || (minDate && ds < minDate) || (maxDate && ds > maxDate)) return
-      if (startSel ? selectedDates.includes(ds) : !selectedDates.includes(ds)) onToggleDate(ds)
-    })
-  }
+      dragRef.current = { start: ds, hover: ds, active: true, dragged: false }
+      setDragVisual(ds)
+    }
+
+    function onMove(e: PointerEvent) {
+      if (!dragRef.current.active) return
+      const el = document.elementFromPoint(e.clientX, e.clientY)
+      if (!el) return
+      const dateEl = (el as HTMLElement).closest('[data-date]') as HTMLElement | null
+      if (!dateEl) return
+      const ds = dateEl.getAttribute('data-date')
+      if (!ds || ds === dragRef.current.hover) return
+      dragRef.current.hover = ds
+      if (ds !== dragRef.current.start) dragRef.current.dragged = true
+      setDragVisual(ds)
+    }
+
+    function onUp() {
+      if (!dragRef.current.active) return
+      const { start, hover, dragged } = dragRef.current
+      dragRef.current = { start: null, hover: null, active: false, dragged: false }
+      setDragVisual(null)
+      if (!start || !hover) return
+      if (!dragged) { onToggleRef.current(start); return }
+      const range = getDateRange(start, hover)
+      const curSel = selectedRef.current
+      const toggle = onToggleRef.current
+      const startSel = curSel.includes(start)
+      const now = todayRef.current
+      range.forEach(ds => {
+        if (ds < now || (minRef.current && ds < minRef.current) || (maxRef.current && ds > maxRef.current)) return
+        if (startSel ? curSel.includes(ds) : !curSel.includes(ds)) toggle(ds)
+      })
+    }
+
+    window.addEventListener('pointerdown', onDown, { passive: false })
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [])
 
   function dateStr(d: number) { return `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
 
@@ -97,16 +134,14 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d2 = 1; d2 <= daysInMonth; d2++) cells.push(d2)
 
-  const dragRange = d.current.start && dragVisual ? getDateRange(d.current.start, dragVisual) : []
+  const dragRange = dragRef.current.start && dragVisual ? getDateRange(dragRef.current.start, dragVisual) : []
 
   return (
     <div
       className="select-none"
       style={{ touchAction: 'none', userSelect: 'none' }}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={() => { d.current = { start: null, hover: null, active: false, dragged: false }; setDragVisual(null) }}
-      onMouseLeave={() => { if (d.current.active) { d.current = { start: null, hover: null, active: false, dragged: false }; setDragVisual(null) }}}
+      onPointerCancel={() => { dragRef.current = { start: null, hover: null, active: false, dragged: false }; setDragVisual(null) }}
+      onMouseLeave={() => { if (dragRef.current.active) { dragRef.current = { start: null, hover: null, active: false, dragged: false }; setDragVisual(null) }}}
     >
       {/* Month nav */}
       <div className="flex items-center justify-between mb-2">
@@ -122,13 +157,12 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           if (d2 === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
           const ds = dateStr(d2)
           const sel = selectedDates.includes(ds)
-          const inDrag = d.current.active && dragRange.includes(ds)
+          const inDrag = dragRef.current.active && dragRange.includes(ds)
           const disabled = ds < todayStr || !!((minDate && ds < minDate) || (maxDate && ds > maxDate))
           const isToday = ds === todayStr
           const avatars = memberAvatars?.[ds] || []
           return (
             <div key={ds} data-date={ds}
-              onPointerDown={(e) => handlePointerDown(e, ds)}
               className={`rounded-md text-xs font-medium flex flex-col items-center justify-start pt-0.5 select-none ${hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'} ${
                 sel ? 'bg-green-500 text-white shadow-sm'
                 : inDrag ? 'bg-green-100 text-green-700 ring-1 ring-green-300'
