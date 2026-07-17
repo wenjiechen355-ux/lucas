@@ -263,22 +263,38 @@ export async function POST(request: NextRequest) {
     plan_analysis_status: 'text_extracted',
   }
 
-  // Try AI analysis
-  const analysis = await analyzePlan(extractedText)
+  // Try AI analysis with retry
+  let analysis: string | null = null
+  let lastError = ''
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    analysis = await analyzePlan(extractedText)
+    if (analysis) break
+    lastError = `Attempt ${attempt} failed`
+    console.warn(`[Analyze] ${lastError}, retrying...`)
+    await new Promise(r => setTimeout(r, 2000))
+  }
+
   if (analysis) {
     updateData.plan_analysis = analysis
     updateData.plan_analysis_status = 'analyzed'
     updateData.plan_analyzed_at = new Date().toISOString()
   } else {
-    console.warn('[Analyze] AI analysis returned null, status will stay text_extracted')
+    console.error('[Analyze] All 3 attempts failed')
   }
 
-  // Try completeness check
-  const completeness = await checkCompleteness(extractedText)
+  // Try completeness check with retry
+  let completeness: string | null = null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    completeness = await checkCompleteness(extractedText)
+    if (completeness) break
+    console.warn(`[Completeness] Attempt ${attempt} failed, retrying...`)
+    await new Promise(r => setTimeout(r, 2000))
+  }
+
   if (completeness) {
     updateData.plan_completeness = completeness
   } else {
-    console.warn('[Analyze] Completeness check returned null')
+    console.error('[Completeness] All 3 attempts failed')
   }
 
   const { error: updateError } = await supabase
@@ -288,6 +304,21 @@ export async function POST(request: NextRequest) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 })
+  }
+
+  // If both AI calls failed, return error so frontend knows
+  if (!analysis && !completeness) {
+    return NextResponse.json({
+      success: false,
+      error: 'AI 分析同完整性檢查都失敗。請稍後重試或聯絡管理員。',
+      status: 'text_extracted',
+      rawTextLength: extractedText.length,
+      debug: {
+        apiKeySet: !!process.env.AGENDA_AI_API_KEY,
+        apiUrl: process.env.AGENDA_AI_API_URL,
+        apiKeyPrefix: process.env.AGENDA_AI_API_KEY?.slice(0, 10),
+      },
+    }, { status: 500 })
   }
 
   // Parse completeness for response
@@ -306,9 +337,5 @@ export async function POST(request: NextRequest) {
     hasCompleteness: !!completeness,
     analysisLength: analysis?.length || 0,
     completeness: completenessData,
-    debug: {
-      apiKeySet: !!process.env.AGENDA_AI_API_KEY,
-      apiUrl: process.env.AGENDA_AI_API_URL,
-    },
   })
 }
