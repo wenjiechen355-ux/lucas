@@ -29,6 +29,7 @@ export default function PlanUploadForm({
   eventId, currentPath, currentName,
   planRawText, planAnalysis, planAnalysisStatus, planCompleteness, planFormatted,
 }: Props) {
+  // VERSION: 2026-07-17-v3-card-layout
   const router = useRouter()
   const supabase = createClient()
   const [uploading, setUploading] = useState(false)
@@ -276,17 +277,11 @@ export default function PlanUploadForm({
 
                     {/* Evaluation content */}
                     {evalSection && (
-                      <div className="text-xs text-gray-700 leading-relaxed space-y-1">
+                      <div className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
                         {evalSection
-                          .replace(/^## .+\n/, '')
-                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                          .split('\n')
-                          .map((line, i) => {
-                            if (line.startsWith('- ')) return <li key={i} className="ml-4 list-disc">{line.slice(2)}</li>
-                            if (line.trim()) return <p key={i} className="mb-0.5" dangerouslySetInnerHTML={{ __html: line }} />
-                            return null
-                          })
-                        }
+                          .replace(/^## .+\n?/, '')
+                          .replace(/\*\*/g, '')
+                          .trim()}
                       </div>
                     )}
                   </div>
