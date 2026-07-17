@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+// Allow up to 60s for AI calls (deepseek-v4-flash thinking mode is slow)
+export const maxDuration = 60
+
 // Extract text from PDF buffer
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
@@ -80,6 +83,7 @@ async function analyzePlan(text: string): Promise<string | null> {
         temperature: 0.3,
         max_tokens: 8192,
       }),
+      signal: AbortSignal.timeout(50000),
     })
 
     if (!res.ok) {
@@ -153,6 +157,7 @@ async function checkCompleteness(text: string): Promise<string | null> {
         temperature: 0.1,
         max_tokens: 8192,
       }),
+      signal: AbortSignal.timeout(50000),
     })
 
     if (!res.ok) {
@@ -263,38 +268,37 @@ export async function POST(request: NextRequest) {
     plan_analysis_status: 'text_extracted',
   }
 
-  // Try AI analysis with retry
+  // Try AI analysis (single attempt first to avoid Vercel timeout)
   let analysis: string | null = null
-  let lastError = ''
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  let analysisError = ''
+  try {
     analysis = await analyzePlan(extractedText)
-    if (analysis) break
-    lastError = `Attempt ${attempt} failed`
-    console.warn(`[Analyze] ${lastError}, retrying...`)
-    await new Promise(r => setTimeout(r, 2000))
+  } catch (e: any) {
+    analysisError = e?.message || String(e)
+    console.error('[Analyze] Exception:', analysisError)
+  }
+  if (!analysis) {
+    console.error('[Analyze] AI returned null, raw_text_len=' + extractedText.length)
   }
 
   if (analysis) {
     updateData.plan_analysis = analysis
     updateData.plan_analysis_status = 'analyzed'
     updateData.plan_analyzed_at = new Date().toISOString()
-  } else {
-    console.error('[Analyze] All 3 attempts failed')
   }
 
-  // Try completeness check with retry
+  // Try completeness check (single attempt)
   let completeness: string | null = null
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  let completenessError = ''
+  try {
     completeness = await checkCompleteness(extractedText)
-    if (completeness) break
-    console.warn(`[Completeness] Attempt ${attempt} failed, retrying...`)
-    await new Promise(r => setTimeout(r, 2000))
+  } catch (e: any) {
+    completenessError = e?.message || String(e)
+    console.error('[Completeness] Exception:', completenessError)
   }
 
   if (completeness) {
     updateData.plan_completeness = completeness
-  } else {
-    console.error('[Completeness] All 3 attempts failed')
   }
 
   const { error: updateError } = await supabase
@@ -308,16 +312,21 @@ export async function POST(request: NextRequest) {
 
   // If both AI calls failed, return error so frontend knows
   if (!analysis && !completeness) {
+    const debugInfo = {
+      apiKeySet: !!process.env.AGENDA_AI_API_KEY,
+      apiKeyLen: process.env.AGENDA_AI_API_KEY?.length || 0,
+      apiKeyPrefix: process.env.AGENDA_AI_API_KEY?.slice(0, 8) || 'NONE',
+      apiUrl: process.env.AGENDA_AI_API_URL || 'NONE',
+      rawTextLen: extractedText.length,
+      analysisError: analysisError || 'AI returned null (check Vercel logs for [AI Analyze] entry)',
+      completenessError: completenessError || 'Completeness returned null',
+    }
     return NextResponse.json({
       success: false,
-      error: 'AI 分析同完整性檢查都失敗。請稍後重試或聯絡管理員。',
+      error: `AI 失敗。Key set=${debugInfo.apiKeySet} prefix="${debugInfo.apiKeyPrefix}" url="${debugInfo.apiUrl}" textLen=${debugInfo.rawTextLen} | AI err: ${debugInfo.analysisError}`,
       status: 'text_extracted',
       rawTextLength: extractedText.length,
-      debug: {
-        apiKeySet: !!process.env.AGENDA_AI_API_KEY,
-        apiUrl: process.env.AGENDA_AI_API_URL,
-        apiKeyPrefix: process.env.AGENDA_AI_API_KEY?.slice(0, 10),
-      },
+      debug: debugInfo,
     }, { status: 500 })
   }
 
