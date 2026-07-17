@@ -48,7 +48,6 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
   const [dragHoverVisual, setDragHoverVisual] = useState<string | null>(null)
   const calendarRef = useRef<HTMLDivElement>(null)
-  const gridRef = useRef<HTMLDivElement>(null)
 
   // ── All mutable state in a single ref object (zero stale closures) ──
   const st = useRef({
@@ -62,41 +61,16 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const hasAvatars = !!memberAvatars
 
-  // ── Helper: compute date string from pointer x,y position ──
+  // ── Helper: find date string from pointer x,y using elementsFromPoint ──
   function dateFromPoint(x: number, y: number): string | null {
-    const grid = gridRef.current
-    if (!grid) return null
-    const rect = grid.getBoundingClientRect()
-    const relX = x - rect.left
-    const relY = y - rect.top
-    if (relX < 0 || relY < 0 || relX > rect.width || relY > rect.height) return null
-
-    // Count cells per row = 7 (CSS grid-cols-7)
-    const childCount = grid.children.length
-    let cellIdx = -1
-    let cumulativeTop = 0
-    for (let i = 0; i < childCount; i++) {
-      const cell = grid.children[i] as HTMLElement
-      const cellRect = cell.getBoundingClientRect()
-      const cellTop = cellRect.top - rect.top
-      const cellBottom = cellTop + cellRect.height
-      const cellLeft = cellRect.left - rect.left
-      const cellRight = cellLeft + cellRect.width
-
-      // Check if pointer is inside this cell (including gap handles)
-      if (relY >= cellTop && relY <= cellBottom && relX >= cellLeft && relX <= cellRight) {
-        cellIdx = i
-        break
+    // elementsFromPoint returns ALL elements at this position (top→bottom)
+    const els = document.elementsFromPoint(x, y)
+    for (const el of els) {
+      if (el instanceof HTMLElement && el.hasAttribute('data-date')) {
+        return el.getAttribute('data-date')
       }
     }
-
-    if (cellIdx < 0) return null
-
-    // Map cell index to date. Cells with null (leading empty cells) are the first `firstDay` cells
-    const dateDay = cellIdx - firstDay + 1
-    if (dateDay < 1 || dateDay > daysInMonth) return null
-
-    return `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(dateDay).padStart(2,'0')}`
+    return null
   }
 
   // ── Native DOM pointer events ──
@@ -228,8 +202,8 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
         ))}
       </div>
 
-      {/* Date grid — ref needed for coordinate calculation */}
-      <div ref={gridRef} className={`grid grid-cols-7 gap-1 ${hasAvatars ? '' : 'gap-0.5'}`}>
+      {/* Date grid */}
+      <div className={`grid grid-cols-7 gap-1 ${hasAvatars ? '' : 'gap-0.5'}`}>
         {cells.map((d, i) => {
           if (d === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
           const ds = dateStr(d)
