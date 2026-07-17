@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, RefreshCw, FileOutput } from 'lucide-react'
+import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp, CheckCircle, XCircle, RefreshCw, FileOutput } from 'lucide-react'
 
 interface Props {
   eventId: string
@@ -37,9 +37,7 @@ export default function PlanUploadForm({
   const [analysisError, setAnalysisError] = useState('')
   const [formatError, setFormatError] = useState('')
   const [showRawText, setShowRawText] = useState(false)
-  const [completenessShown, setCompletenessShown] = useState(true)
   const [showFormatted, setShowFormatted] = useState(false)
-  const [currentSection, setCurrentSection] = useState(0)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -126,8 +124,6 @@ export default function PlanUploadForm({
   const hasFile = !!(currentPath && currentName)
   const isAnalyzed = planAnalysisStatus === 'analyzed'
   const hasRawText = planAnalysisStatus === 'text_extracted'
-  const canAnalyze = hasFile && planAnalysisStatus !== 'analyzed' && !analyzing
-  const isIncomplete = completeness && !completeness.is_complete
   const hasFormatted = !!planFormatted
 
   return (
@@ -213,124 +209,63 @@ export default function PlanUploadForm({
         </div>
       )}
 
-      {/* Completeness Alert — show when incomplete */}
-      {isAnalyzed && isIncomplete && completeness && completenessShown && (
-        <div className="mt-3 bg-amber-50 border border-amber-300 rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-amber-100 border-b border-amber-200 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4 text-amber-700" />
-              <span className="text-xs font-semibold text-amber-800">計劃書完整性檢查</span>
-              <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-medium">
-                得分：{completeness.score}/100
-              </span>
-            </div>
-            <button onClick={() => setCompletenessShown(false)} className="text-amber-500 hover:text-amber-700 text-xs">收起</button>
-          </div>
-          <div className="p-3 space-y-2">
-            <div className="grid grid-cols-2 gap-1.5">
-              {Object.entries(completeness.items || {}).map(([key, val]) => (
-                <div key={key} className={`flex items-center gap-1.5 text-xs ${val ? 'text-green-700' : 'text-red-700'}`}>
-                  {val ? (
-                    <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                  ) : (
-                    <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+      {/* ── 分析結果區 ── */}
+      {isAnalyzed && planAnalysis && (
+        <div className="mt-3 space-y-3">
+          {/* 合格/不合格 Badge */}
+          {completeness && (
+            <div className={`rounded-lg border px-4 py-3 flex items-center gap-3 ${
+              completeness.is_complete
+                ? 'bg-green-50 border-green-300'
+                : 'bg-red-50 border-red-300'
+            }`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
+                completeness.is_complete
+                  ? 'bg-green-200 text-green-800'
+                  : 'bg-red-200 text-red-800'
+              }`}>
+                {completeness.is_complete ? '✅' : '❌'}
+              </div>
+              <div className="flex-1">
+                <p className={`text-sm font-bold ${completeness.is_complete ? 'text-green-800' : 'text-red-800'}`}>
+                  {completeness.is_complete ? '計劃書合格' : '計劃書唔完整'}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  完整性評分：{completeness.score}/100
+                  {!completeness.is_complete && completeness.missing?.length > 0 && (
+                    <> · 缺少 {completeness.missing.length} 項</>
                   )}
-                  <span>{key}</span>
-                </div>
-              ))}
-            </div>
-
-            {completeness.missing && completeness.missing.length > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
-                <p className="text-xs font-medium text-red-700 mb-1">⚠️ 以下重要資料缺少或唔夠完整：</p>
-                <ul className="text-xs text-red-600 list-disc list-inside space-y-0.5">
-                  {completeness.missing.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ul>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs text-red-600">建議重新上載更完整嘅計劃書</span>
-                  <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
-                    <RefreshCw className="w-3 h-3" /> 重新上載
-                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.txt" onChange={handleFileChange} />
-                  </label>
-                </div>
+                </p>
               </div>
-            )}
+            </div>
+          )}
 
-            {completeness.detail && (
-              <p className="text-xs text-amber-700">{completeness.detail}</p>
-            )}
+          {/* Missing items alert + re-upload */}
+          {completeness && !completeness.is_complete && completeness.missing?.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-xs font-medium text-red-700 mb-1.5">⚠️ 建議補充以下資料後重新上載：</p>
+              <ul className="text-xs text-red-600 list-disc list-inside space-y-0.5 mb-2">
+                {completeness.missing.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+              <label className="inline-flex cursor-pointer items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
+                <RefreshCw className="w-3 h-3" /> 重新上載計劃書
+                <input type="file" className="hidden" accept=".pdf,.doc,.docx,.txt" onChange={handleFileChange} />
+              </label>
+            </div>
+          )}
+
+          {/* Full analysis content — always visible, scrollable */}
+          <div className="bg-white rounded-lg border border-blue-200 overflow-hidden">
+            <div className="px-3 py-2 bg-blue-50 border-b border-blue-200 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-blue-600" />
+              <span className="text-xs font-semibold text-blue-800">AI 計劃書分析結果</span>
+            </div>
+            <div className="p-3 text-xs text-gray-700 whitespace-pre-wrap max-h-[600px] overflow-y-auto leading-relaxed">
+              {planAnalysis}
+            </div>
           </div>
         </div>
       )}
-
-      {/* Completeness Pass */}
-      {isAnalyzed && completeness && completeness.is_complete && completenessShown && (
-        <div className="mt-3 bg-green-50 border border-green-200 rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-green-100 border-b border-green-200 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle className="w-4 h-4 text-green-700" />
-              <span className="text-xs font-semibold text-green-800">完整性檢查通過</span>
-              <span className="text-[10px] bg-green-200 text-green-800 px-1.5 py-0.5 rounded-full font-medium">
-                得分：{completeness.score}/100
-              </span>
-            </div>
-            <button onClick={() => setCompletenessShown(false)} className="text-green-500 hover:text-green-700 text-xs">收起</button>
-          </div>
-          <div className="p-3 grid grid-cols-2 gap-1.5">
-            {Object.entries(completeness.items || {}).map(([key, val]) => (
-              <div key={key} className="flex items-center gap-1.5 text-xs text-green-700">
-                <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                <span>{key}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Analysis Result — with pagination */}
-      {isAnalyzed && planAnalysis && (() => {
-        const sections = planAnalysis.split(/\n(?=## |### |(?:\* |-\ )?[📋👥⏱💰📦⚠️🎯])/).filter(Boolean)
-        const totalSections = sections.length
-        const sectionLabel = totalSections > 1 ? `${currentSection + 1}/${totalSections}` : ''
-
-        // Reset to first section when analysis changes
-        if (currentSection >= totalSections) setCurrentSection(0)
-
-        return (
-          <div className="mt-3 bg-white rounded-lg border border-blue-200 overflow-hidden">
-            <div className="px-3 py-2 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-blue-600" />
-                <span className="text-xs font-semibold text-blue-800">AI 計劃書分析結果</span>
-                {sectionLabel && (
-                  <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full font-medium">
-                    {sectionLabel}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                {totalSections > 1 && currentSection > 0 && (
-                  <button onClick={() => setCurrentSection(currentSection - 1)}
-                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-100 rounded">
-                    上一頁
-                  </button>
-                )}
-                {totalSections > 1 && currentSection < totalSections - 1 && (
-                  <button onClick={() => setCurrentSection(currentSection + 1)}
-                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-100 rounded">
-                    下一頁
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="p-3 text-xs text-gray-700 whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed">
-              {sections[currentSection]}
-            </div>
-          </div>
-        )
-      })()}
 
       {/* Formatted Plan Preview */}
       {hasFormatted && (
