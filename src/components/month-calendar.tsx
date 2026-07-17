@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface MonthCalendarProps {
@@ -35,7 +35,6 @@ function getDateRange(start: string, end: string): string[] {
   const dir = s <= e ? 1 : -1
   const cur = new Date(s)
   while (dir === 1 ? cur <= e : cur >= e) {
-    // Use local date to avoid UTC timezone offset issues (+8)
     const y = cur.getFullYear()
     const m = String(cur.getMonth() + 1).padStart(2, '0')
     const d = String(cur.getDate()).padStart(2, '0')
@@ -49,17 +48,14 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const today = new Date()
   const [viewMonth, setViewMonth] = useState(m ?? today.getMonth())
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
-
-  // ── Visual rendering state ──
   const [dragHoverVisual, setDragHoverVisual] = useState<string | null>(null)
 
-  // ── Refs: all drag logic uses refs → no stale closure ──
+  const containerRef = useRef<HTMLDivElement>(null)
   const dragStartRef = useRef<string | null>(null)
   const dragHoverRef = useRef<string | null>(null)
   const isDraggingRef = useRef(false)
-  const dragActivatedRef = useRef(false) // true = actually entered different date
+  const dragActivatedRef = useRef(false)
 
-  // ── Refs for callback props (avoid stale closure in global handler) ──
   const selectedDatesRef = useRef(selectedDates)
   selectedDatesRef.current = selectedDates
   const onToggleDateRef = useRef(onToggleDate)
@@ -87,9 +83,19 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
 
   const dateStr = (d: number) => `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
 
-  // ── Global pointerup listener ──
+  // ── Get date string from a DOM element ──
+  const getDateFromElement = useCallback((el: Element | null): string | null => {
+    if (!el) return null
+    const date = el.getAttribute('data-date')
+    if (date) return date
+    // Check parent (in case the child span was hit)
+    const parent = el.closest('[data-date]')
+    return parent ? parent.getAttribute('data-date') : null
+  }, [])
+
+  // ── Global pointerup ──
   useEffect(() => {
-    function handleGlobalPointerUp() {
+    function handleUp() {
       if (!isDraggingRef.current) return
       const start = dragStartRef.current
       const hoverEnd = dragHoverRef.current
@@ -103,7 +109,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
         return
       }
 
-      // Single click: no drag activation → toggle only the clicked date
+      // Single click
       if (!dragActivatedRef.current) {
         onToggleDateRef.current(start)
         isDraggingRef.current = false
@@ -114,7 +120,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
         return
       }
 
-      // Drag: toggle the entire range
+      // Drag
       const range = getDateRange(start, hoverEnd)
       const curSelected = selectedDatesRef.current
       const toggle = onToggleDateRef.current
@@ -125,12 +131,8 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
         if (date < ts) return
         if (minDateRef.current && date < minDateRef.current) return
         if (maxDateRef.current && date > maxDateRef.current) return
-
-        if (startSel) {
-          if (curSelected.includes(date)) toggle(date)
-        } else {
-          if (!curSelected.includes(date)) toggle(date)
-        }
+        if (startSel) { if (curSelected.includes(date)) toggle(date) }
+        else { if (!curSelected.includes(date)) toggle(date) }
       })
 
       isDraggingRef.current = false
@@ -140,29 +142,36 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
       setDragHoverVisual(null)
     }
 
-    window.addEventListener('pointerup', handleGlobalPointerUp)
-    return () => window.removeEventListener('pointerup', handleGlobalPointerUp)
+    window.addEventListener('pointerup', handleUp)
+    return () => window.removeEventListener('pointerup', handleUp)
   }, [])
 
+  // ── pointerdown on date button ──
   function handlePointerDown(date: string) {
-    const ds = date
-    if (ds < todayStr) return
-    if (minDate && ds < minDate) return
-    if (maxDate && ds > maxDate) return
+    if (date < todayStr) return
+    if (minDate && date < minDate) return
+    if (maxDate && date > maxDate) return
 
-    // Set both ref AND visual state synchronously
     dragStartRef.current = date
     dragHoverRef.current = date
     isDraggingRef.current = true
+    dragActivatedRef.current = false
     setDragHoverVisual(date)
   }
 
-  function handlePointerEnter(date: string) {
+  // ── pointermove on container: detect date under pointer reliably ──
+  function handlePointerMove(e: React.PointerEvent) {
     if (!isDraggingRef.current) return
-    if (date !== dragStartRef.current) {
-      dragActivatedRef.current = true // 真正開始拖拽
-    }
+
+    // Find the element at the current pointer position
+    const el = document.elementFromPoint(e.clientX, e.clientY)
+    const date = getDateFromElement(el)
+    if (!date || date === dragHoverRef.current) return
+
     dragHoverRef.current = date
+    if (date !== dragStartRef.current) {
+      dragActivatedRef.current = true
+    }
     setDragHoverVisual(date)
   }
 
@@ -176,7 +185,9 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
 
   return (
     <div
-      className="select-none"
+      ref={containerRef}
+      className="select-none touch-none"
+      onPointerMove={handlePointerMove}
       onMouseLeave={() => {
         if (isDraggingRef.current) {
           isDraggingRef.current = false
@@ -222,8 +233,8 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
             <button
               key={ds}
               type="button"
+              data-date={ds}
               onPointerDown={() => handlePointerDown(ds)}
-              onPointerEnter={() => handlePointerEnter(ds)}
               disabled={disabled}
               className={`rounded-md text-xs font-medium transition-all flex flex-col items-center justify-start pt-0.5 outline-none ${
                 hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'
