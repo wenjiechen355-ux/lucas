@@ -29,7 +29,8 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
 
 // AI analysis via DeepSeek API
 async function analyzePlan(text: string): Promise<string | null> {
-  const apiKey = process.env.AGENDA_AI_API_KEY
+  // Fallback to hard-coded env (in case Vercel env not set)
+  const apiKey = process.env.AGENDA_AI_API_KEY || 'sk-Oj0ejQ8e5akstfXY1jOql6dBxy5bKSVPID6UeK7fL1C523ay'
   if (!apiKey) return null
 
   const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.silra.cn/v1/chat/completions'
@@ -83,7 +84,7 @@ async function analyzePlan(text: string): Promise<string | null> {
         temperature: 0.3,
         max_tokens: 8192,
       }),
-      signal: AbortSignal.timeout(50000),
+      signal: AbortSignal.timeout(55000),
     })
 
     if (!res.ok) {
@@ -110,7 +111,8 @@ async function analyzePlan(text: string): Promise<string | null> {
 
 // Completeness check — returns JSON: { is_complete, missing[], score }
 async function checkCompleteness(text: string): Promise<string | null> {
-  const apiKey = process.env.AGENDA_AI_API_KEY
+  // Fallback to hard-coded env (in case Vercel env not set)
+  const apiKey = process.env.AGENDA_AI_API_KEY || 'sk-Oj0ejQ8e5akstfXY1jOql6dBxy5bKSVPID6UeK7fL1C523ay'
   if (!apiKey) return null
 
   const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.silra.cn/v1/chat/completions'

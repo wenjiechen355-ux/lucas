@@ -23,7 +23,8 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
 }
 
 async function formatPlan(text: string): Promise<string | null> {
-  const apiKey = process.env.AGENDA_AI_API_KEY
+  // Fallback to hard-coded env (in case Vercel env not set)
+  const apiKey = process.env.AGENDA_AI_API_KEY || 'sk-Oj0ejQ8e5akstfXY1jOql6dBxy5bKSVPID6UeK7fL1C523ay'
   if (!apiKey) return null
 
   const apiUrl = process.env.AGENDA_AI_API_URL || 'https://api.silra.cn/v1/chat/completions'
