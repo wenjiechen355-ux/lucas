@@ -38,6 +38,11 @@ interface EventData {
   agenda_analysis?: string
   agenda_analysis_status?: string
   is_online?: boolean
+  // 計劃書 AI 分析
+  plan_raw_text?: string
+  plan_analysis?: string
+  plan_analysis_status?: string
+  plan_analyzed_at?: string
   // 新 3 步審批字段
   approval_state?: string       // 'none' | 'vp_pending' | 'vp_approved' | 'chair_approved' | 'leader_approved' | 'rejected'
   vp_approved_by?: string
@@ -649,6 +654,9 @@ export default function EventPrepPage() {
                   eventId={event.id}
                   currentPath={event.plan_doc_path}
                   currentName={event.plan_doc_name}
+                  planRawText={event.plan_raw_text}
+                  planAnalysis={event.plan_analysis}
+                  planAnalysisStatus={event.plan_analysis_status}
                 />
               </div>
 
