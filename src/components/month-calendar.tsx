@@ -218,6 +218,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           return (
             <div
               key={ds}
+              data-date={ds}
               className={`rounded-md text-xs font-medium flex flex-col items-center justify-start pt-0.5 select-none ${
                 hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'
               } ${
