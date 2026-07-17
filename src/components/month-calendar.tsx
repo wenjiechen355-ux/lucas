@@ -48,109 +48,127 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   const [viewYear, setViewYear] = useState(y ?? today.getFullYear())
   const [dragHoverVisual, setDragHoverVisual] = useState<string | null>(null)
   const calendarRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
 
-  // ── All mutable state in a single ref to avoid stale closures entirely ──
-  const s = useRef({
-    dragStart: null as string | null,
-    dragHover: null as string | null,
-    isDragging: false,
-    dragActivated: false,
-    selectedDates: selectedDates,
-    onToggleDate: onToggleDate,
-    minDate: minDate,
-    maxDate: maxDate,
+  // ── All mutable state in a single ref object (zero stale closures) ──
+  const st = useRef({
+    start: null as string | null,
+    hover: null as string | null,
+    active: false,
+    dragged: false,
   })
-  // Keep refs current
-  s.current.selectedDates = selectedDates
-  s.current.onToggleDate = onToggleDate
-  s.current.minDate = minDate
-  s.current.maxDate = maxDate
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const hasAvatars = !!memberAvatars
 
-  // ── Helper: get date string from a button child ──
-  function getDateFromTarget(el: EventTarget | null): string | null {
-    if (!(el instanceof Element)) return null
-    return el.closest('[data-date]')?.getAttribute('data-date') || null
+  // ── Helper: compute date string from pointer x,y position ──
+  function dateFromPoint(x: number, y: number): string | null {
+    const grid = gridRef.current
+    if (!grid) return null
+    const rect = grid.getBoundingClientRect()
+    const relX = x - rect.left
+    const relY = y - rect.top
+    if (relX < 0 || relY < 0 || relX > rect.width || relY > rect.height) return null
+
+    // Count cells per row = 7 (CSS grid-cols-7)
+    const childCount = grid.children.length
+    let cellIdx = -1
+    let cumulativeTop = 0
+    for (let i = 0; i < childCount; i++) {
+      const cell = grid.children[i] as HTMLElement
+      const cellRect = cell.getBoundingClientRect()
+      const cellTop = cellRect.top - rect.top
+      const cellBottom = cellTop + cellRect.height
+      const cellLeft = cellRect.left - rect.left
+      const cellRight = cellLeft + cellRect.width
+
+      // Check if pointer is inside this cell (including gap handles)
+      if (relY >= cellTop && relY <= cellBottom && relX >= cellLeft && relX <= cellRight) {
+        cellIdx = i
+        break
+      }
+    }
+
+    if (cellIdx < 0) return null
+
+    // Map cell index to date. Cells with null (leading empty cells) are the first `firstDay` cells
+    const dateDay = cellIdx - firstDay + 1
+    if (dateDay < 1 || dateDay > daysInMonth) return null
+
+    return `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(dateDay).padStart(2,'0')}`
   }
 
-  // ── All pointer events on native DOM, not React synthetic events ──
+  // ── Native DOM pointer events ──
   useEffect(() => {
     const cal = calendarRef.current
     if (!cal) return
 
     function onDown(e: PointerEvent) {
-      const date = getDateFromTarget(e.target)
-      if (!date) return
-      if (date < todayStr) return
-      if (s.current.minDate && date < s.current.minDate) return
-      if (s.current.maxDate && date > s.current.maxDate) return
+      const ds = dateFromPoint(e.clientX, e.clientY)
+      if (!ds) return
+      if (ds < todayStr) return
+      if (minDate && ds < minDate) return
+      if (maxDate && ds > maxDate) return
 
-      s.current.dragStart = date
-      s.current.dragHover = date
-      s.current.isDragging = true
-      s.current.dragActivated = false
-      setDragHoverVisual(date)
-      e.preventDefault() // prevent text selection, focus, etc.
+      st.current.start = ds
+      st.current.hover = ds
+      st.current.active = true
+      st.current.dragged = false
+      setDragHoverVisual(ds)
+      e.preventDefault()
     }
 
     function onMove(e: PointerEvent) {
-      if (!s.current.isDragging) return
+      if (!st.current.active) return
 
-      // Find what's under the pointer right now
-      const el = document.elementFromPoint(e.clientX, e.clientY)
-      const date = getDateFromTarget(el)
-      if (!date || date === s.current.dragHover) return
+      const ds = dateFromPoint(e.clientX, e.clientY)
+      if (!ds || ds === st.current.hover) return
 
-      s.current.dragHover = date
-      if (date !== s.current.dragStart) {
-        s.current.dragActivated = true
+      st.current.hover = ds
+      if (ds !== st.current.start) {
+        st.current.dragged = true
       }
-      setDragHoverVisual(date)
+      setDragHoverVisual(ds)
     }
 
-    function onEnd(_e: PointerEvent) {
-      if (!s.current.isDragging) return
-      const { dragStart, dragHover, dragActivated } = s.current
-      s.current.isDragging = false
-      s.current.dragStart = null
-      s.current.dragHover = null
-      s.current.dragActivated = false
+    function onEnd() {
+      if (!st.current.active) return
+      const { start, hover, dragged } = st.current
+      st.current.active = false
+      st.current.start = null
+      st.current.hover = null
+      st.current.dragged = false
       setDragHoverVisual(null)
 
-      if (!dragStart || !dragHover) return
+      if (!start || !hover) return
 
-      // Single click
-      if (!dragActivated) {
-        s.current.onToggleDate(dragStart)
+      if (!dragged) {
+        // Single click
+        onToggleDate(start)
         return
       }
 
-      // Drag: toggle range
-      const range = getDateRange(dragStart, dragHover)
-      const curSel = s.current.selectedDates
-      const startSel = curSel.includes(dragStart)
-      const ts = todayStr
-      const mn = s.current.minDate
-      const mx = s.current.maxDate
+      // Drag
+      const range = getDateRange(start, hover)
+      const toggle = onToggleDate
+      const startSel = selectedDates.includes(start)
 
-      range.forEach(date => {
-        if (date < ts) return
-        if (mn && date < mn) return
-        if (mx && date > mx) return
-        if (startSel) { if (curSel.includes(date)) s.current.onToggleDate(date) }
-        else { if (!curSel.includes(date)) s.current.onToggleDate(date) }
+      range.forEach(d => {
+        if (d < todayStr) return
+        if (minDate && d < minDate) return
+        if (maxDate && d > maxDate) return
+        if (startSel) { if (selectedDates.includes(d)) toggle(d) }
+        else { if (!selectedDates.includes(d)) toggle(d) }
       })
     }
 
     function onCancel() {
-      if (!s.current.isDragging) return
-      s.current.isDragging = false
-      s.current.dragStart = null
-      s.current.dragHover = null
-      s.current.dragActivated = false
+      if (!st.current.active) return
+      st.current.active = false
+      st.current.start = null
+      st.current.hover = null
+      st.current.dragged = false
       setDragHoverVisual(null)
     }
 
@@ -165,7 +183,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onCancel)
     }
-  }, [viewMonth, viewYear, todayStr]) // re-attach when month/year changes
+  }, [viewMonth, viewYear, todayStr, minDate, maxDate, selectedDates, onToggleDate])
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1) }
@@ -182,16 +200,15 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
-  // Compute drag range for visual highlighting
-  const dragRange = s.current.dragStart && dragHoverVisual
-    ? getDateRange(s.current.dragStart, dragHoverVisual)
+  const dragRange = st.current.start && dragHoverVisual
+    ? getDateRange(st.current.start, dragHoverVisual)
     : []
 
   return (
     <div
       ref={calendarRef}
-      className="select-none touch-none"
-      style={{ touchAction: 'none' }}
+      className="select-none"
+      style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
     >
       {/* Month nav */}
       <div className="flex items-center justify-between mb-2">
@@ -211,13 +228,13 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
         ))}
       </div>
 
-      {/* Date grid */}
-      <div className={`grid grid-cols-7 gap-1 ${hasAvatars ? '' : 'gap-0.5'}`}>
+      {/* Date grid — ref needed for coordinate calculation */}
+      <div ref={gridRef} className={`grid grid-cols-7 gap-1 ${hasAvatars ? '' : 'gap-0.5'}`}>
         {cells.map((d, i) => {
           if (d === null) return <div key={`e${i}`} className={hasAvatars ? 'min-h-[4rem]' : 'h-8'} />
           const ds = dateStr(d)
           const sel = selectedDates.includes(ds)
-          const inDragRange = s.current.isDragging && dragRange.includes(ds)
+          const inDragRange = st.current.active && dragRange.includes(ds)
           const past = ds < todayStr
           const outOfRange = !!((minDate && ds < minDate) || (maxDate && ds > maxDate))
           const disabled = past || outOfRange
@@ -227,8 +244,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
           return (
             <div
               key={ds}
-              data-date={ds}
-              className={`rounded-md text-xs font-medium transition-all flex flex-col items-center justify-start pt-0.5 select-none cursor-pointer ${
+              className={`rounded-md text-xs font-medium flex flex-col items-center justify-start pt-0.5 select-none ${
                 hasAvatars ? 'min-h-[4rem] px-0.5' : 'h-8'
               } ${
                 sel
@@ -238,10 +254,10 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
                     : isToday && !outOfRange
                       ? 'bg-green-50 text-green-700 ring-1 ring-green-300'
                       : outOfRange
-                        ? 'text-red-200 cursor-not-allowed bg-red-50/30'
+                        ? 'text-red-200 bg-red-50/30'
                         : past
-                          ? 'text-gray-200 cursor-not-allowed'
-                          : 'text-gray-600 hover:bg-gray-100'
+                          ? 'text-gray-200'
+                          : 'text-gray-600 cursor-pointer hover:bg-gray-100'
               }`}
             >
               <span className="pointer-events-none">{d}</span>
