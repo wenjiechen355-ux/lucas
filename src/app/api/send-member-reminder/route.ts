@@ -48,7 +48,9 @@ export async function POST(request: NextRequest) {
     </div>
   `
 
-  const result = await sendEmail({ to: member.email, subject: `【${typeLabel}提醒】${targetTitle}`, html })
+  const text = `澳門童軍管理系統\n\n${member.full_name || '成員'}，你好！\n\n溫馨提醒，以下${type === 'poll' ? '活動時間徵集' : '活動'}需要你嘅參與：\n\n${targetTitle}\n\n${type === 'poll' ? '請盡快登入系統進行投票，以便確定活動安排。' : '請登入系統檢查活動詳情並確認出席狀態。'}${link ? '\n\n前往查看: ' + link : ''}\n\n此郵件由系統自動發送，請勿回覆。`
+
+  const result = await sendEmail({ to: member.email, subject: `【${typeLabel}提醒】${targetTitle}`, html, text })
   if (result.success) {
     return NextResponse.json({ success: true, memberName: member.full_name })
   }

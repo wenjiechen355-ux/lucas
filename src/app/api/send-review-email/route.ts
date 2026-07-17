@@ -43,7 +43,9 @@ export async function POST(request: NextRequest) {
     </div>
   `
 
-  const result = await sendEmail({ to: reviewer.email, subject: `【${typeLabel}】${title}`, html })
+  const text = `澳門童軍管理系統\n\n${reviewer.full_name}，你好！\n\n${submitterName || '有成員'} 提交咗一份 ${typeLabel}，需要你審核：\n\n${title}${link ? '\n\n前往審核: ' + link : ''}\n\n此郵件由系統自動發送，請勿回覆。`
+
+  const result = await sendEmail({ to: reviewer.email, subject: `【${typeLabel}】${title}`, html, text })
   if (result.success) {
     return NextResponse.json({ success: true })
   }

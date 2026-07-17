@@ -16,13 +16,15 @@ export default function NewEventPage() {
   const [latitude, setLatitude] = useState<number | null>(null)
   const [longitude, setLongitude] = useState<number | null>(null)
   const [isOnline, setIsOnline] = useState(false)
-  // 团部活动专属选项
-  const [isExecMeeting, setIsExecMeeting] = useState(false)
-  const [requiresMinutes, setRequiresMinutes] = useState(false)
+// 团部活动子分类选项
+const UNIT_CATEGORIES = ['', '宿營活動', '水上活動', '執委會開會'] as const
+const [unitCategory, setUnitCategory] = useState<string>('')
   const [creating, setCreating] = useState(false)
   const router = useRouter()
 
   // 联团/外出交流都视为「普通活动」,全团可签到
+  const isExecMeeting = unitCategory === '執委會開會'
+  const requiresMinutes = unitCategory === '執委會開會'
   const isExecOnly = eventType === 'unit' && isExecMeeting
 
   async function handleSubmit(e: React.FormEvent) {
@@ -32,6 +34,7 @@ export default function NewEventPage() {
     try {
       const formData = new FormData()
       formData.append('event_type', eventType)
+      formData.append('unit_category', eventType === 'unit' ? unitCategory : '')
       formData.append('title', title)
       formData.append('description', description)
       formData.append('event_date', eventDate)
@@ -79,10 +82,9 @@ export default function NewEventPage() {
             onChange={e => {
               const v = e.target.value as EventType
               setEventType(v)
-              // 切换为联团/外出交流时,清空团部专属选项
+              // 切换为联团/外出交流时,清空团部子分类
               if (v !== 'unit') {
-                setIsExecMeeting(false)
-                setRequiresMinutes(false)
+                setUnitCategory('')
               }
             }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white"
@@ -93,42 +95,31 @@ export default function NewEventPage() {
             <option value="exchange">外出交流活動</option>
           </select>
           <p className="text-xs text-gray-400 mt-1">
-            {eventType === 'unit' && '本團主辦之活動,可進一步設定是否為執委會例會'}
+            {eventType === 'unit' && '本團主辦之活動，可選擇活動子類別'}
             {eventType === 'joint' && '與其他旅部聯合舉辦之活動,全團成員可簽到'}
             {eventType === 'exchange' && '外出與其他團體/機構交流之活動,全團成員可簽到'}
           </p>
         </div>
 
-        {/* 团部活动专属选项 */}
+        {/* 团部活动子分类 */}
         {eventType === 'unit' && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
-            <p className="text-xs font-medium text-green-800 mb-2">團部活動 - 進階設定</p>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="isExecMeeting"
-                checked={isExecMeeting}
-                onChange={e => setIsExecMeeting(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-              />
-              <label htmlFor="isExecMeeting" className="text-sm text-gray-700">
-                執委會例會
-                <span className="text-gray-400 ml-1">（僅執委會成員可簽到）</span>
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="requiresMinutes"
-                checked={requiresMinutes}
-                onChange={e => setRequiresMinutes(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              />
-              <label htmlFor="requiresMinutes" className="text-sm text-gray-700">
-                文書上載會議記錄
-                <span className="text-gray-400 ml-1">（活動完成後需由文書上載會議記錄）</span>
-              </label>
-            </div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <label className="text-xs font-medium text-green-800 mb-2 block">團部活動 - 子類別</label>
+            <select
+              value={unitCategory}
+              onChange={e => setUnitCategory(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white"
+            >
+              <option value="">一般團部活動</option>
+              {UNIT_CATEGORIES.filter(c => c).map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            {unitCategory === '執委會開會' && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-100 rounded px-2 py-1">
+                <span>✅ 已自動設定：僅執委會可簽到 + 完成後需上載會議記錄</span>
+              </div>
+            )}
           </div>
         )}
 

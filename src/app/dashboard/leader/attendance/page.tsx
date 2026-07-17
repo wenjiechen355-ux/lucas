@@ -41,7 +41,16 @@ export default async function LeaderAttendancePage() {
           <div key={event.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-sm transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">{event.title}</h3>
+                <h3 className="font-semibold text-gray-900">
+                  {event.title}
+                  {event.unit_category && (
+                    <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      event.unit_category === '執委會開會' ? 'bg-purple-50 text-purple-600' :
+                      event.unit_category === '宿營活動' ? 'bg-amber-50 text-amber-600' :
+                      event.unit_category === '水上活動' ? 'bg-blue-50 text-blue-600' : ''
+                    }`}>{event.unit_category}</span>
+                  )}
+                </h3>
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                   <span>{new Date(event.event_date).toLocaleDateString('zh-HK')}</span>
                   {event.is_online ? (

@@ -27,6 +27,7 @@ const MEMBER_PAGES = [
   '/dashboard/progress',
   '/dashboard/documents',
   '/dashboard/event-polls',
+  '/dashboard/payments',
 ]
 
 // Common pages everyone can access
@@ -36,6 +37,7 @@ const COMMON_PAGES = [
   '/dashboard/profile',
   '/dashboard/change-password',
   '/dashboard/notifications',
+  '/dashboard/payments',
 ]
 
 // Chair bonus

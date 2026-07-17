@@ -43,11 +43,12 @@ export async function POST(request: NextRequest) {
     </div>
   `
 
-  // Send to each exec member individually via Resend
+  const text = `澳門童軍管理系統\n\n各位執委會成員，你好！\n\n有新嘅活動時間徵集需要你投票：\n\n${pollTitle}${pollDesc ? '\n' + pollDesc : ''}\n\n前往投票: ${pollUrl}\n\n此郵件由系統自動發送，請勿回覆。`
+
   let sent = 0
   let failed = 0
   const results = await Promise.allSettled(
-    execMembers.map(m => sendEmail({ to: m.email, subject, html }))
+    execMembers.map(m => sendEmail({ to: m.email, subject, html, text }))
   )
   for (const r of results) {
     if (r.status === 'fulfilled' && r.value.success) sent++

@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
           ${link ? `<a href="${link}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;margin-top:8px">前往查看</a>` : ''}
           <p style="color:#888;font-size:12px;margin-top:16px">此郵件由系統自動發送，請勿回覆。</p>
         </div>`
-        return sendEmail({ to: member.email, subject: `【${typeLabel}提醒】${targetTitle}`, html })
+        const text = `澳門童軍管理系統\n\n${member.full_name || '成員'}，你好！\n\n溫馨提醒，以下${typeLabel}需要你嘅參與：\n\n${targetTitle}\n\n${actionText}${link ? '\n\n前往查看: ' + link : ''}\n\n此郵件由系統自動發送，請勿回覆。`
+        return sendEmail({ to: member.email, subject: `【${typeLabel}提醒】${targetTitle}`, html, text })
       })
   )
 

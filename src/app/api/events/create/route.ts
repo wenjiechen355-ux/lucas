@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData()
   const eventType = (formData.get('event_type') as string) || 'unit'
+  const unitCategory = (formData.get('unit_category') as string) || ''
   const title = formData.get('title') as string
   const description = formData.get('description') as string
   const eventDate = formData.get('event_date') as string
@@ -46,10 +47,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '请填写活动标题' }, { status: 400 })
   }
 
+  // 团部活动子分类逻辑: 拣"執委會開會"就自动设例会+记录
+  const isExecMeetingAuto = unitCategory === '執委會開會'
+  const requiresMinutesAuto = unitCategory === '執委會開會'
+  
   // 验证：仅 unit 类型才能设例会/会议记录
-  const finalIsExecMeeting = eventType === 'unit' ? isExecMeeting : false
-  const finalRequiresMinutes = eventType === 'unit' ? requiresMinutes : false
-  const finalIsExecOnly = eventType === 'unit' ? isExecMeeting : false
+  const finalIsExecMeeting = eventType === 'unit' ? (isExecMeetingAuto || isExecMeeting) : false
+  const finalRequiresMinutes = eventType === 'unit' ? (requiresMinutesAuto || requiresMinutes) : false
+  const finalIsExecOnly = eventType === 'unit' ? finalIsExecMeeting : false
 
   const { error } = await supabase.from('events').insert({
     title,
@@ -59,6 +64,7 @@ export async function POST(request: NextRequest) {
     created_by: user.id,
     attendance_open: false, // 預設唔開放出席
     event_type: eventType,
+    unit_category: eventType === 'unit' ? (unitCategory || null) : null,
     is_exec_only: finalIsExecOnly,
     is_exec_meeting: finalIsExecMeeting,
     requires_minutes: finalRequiresMinutes,

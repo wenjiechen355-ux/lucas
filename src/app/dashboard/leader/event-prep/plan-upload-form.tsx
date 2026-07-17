@@ -209,7 +209,7 @@ export default function PlanUploadForm({
         </div>
       )}
 
-      {/* ── 分析結果區 ── */}
+      {/* ── 分析結果區 ── (v2 card-based) */}
       {isAnalyzed && planAnalysis && (() => {
         const sections = planAnalysis.split(/\n(?=## )/).filter(Boolean)
         
