@@ -44,6 +44,7 @@ interface EventData {
   plan_analysis_status?: string
   plan_analyzed_at?: string
   plan_completeness?: string
+  plan_formatted?: string
   // 新 3 步審批字段
   approval_state?: string       // 'none' | 'vp_pending' | 'vp_approved' | 'chair_approved' | 'leader_approved' | 'rejected'
   vp_approved_by?: string
@@ -659,6 +660,7 @@ export default function EventPrepPage() {
                   planAnalysis={event.plan_analysis}
                   planAnalysisStatus={event.plan_analysis_status}
                   planCompleteness={event.plan_completeness}
+                  planFormatted={event.plan_formatted}
                 />
               </div>
 

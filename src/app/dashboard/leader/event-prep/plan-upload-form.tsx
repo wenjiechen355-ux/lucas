@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
+import { Upload, FileText, Download, Loader2, Sparkles, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, RefreshCw, FileOutput } from 'lucide-react'
 
 interface Props {
   eventId: string
@@ -14,6 +14,7 @@ interface Props {
   planAnalysis?: string | null
   planAnalysisStatus?: string | null
   planCompleteness?: string | null
+  planFormatted?: string | null
 }
 
 interface CompletenessData {
@@ -26,15 +27,18 @@ interface CompletenessData {
 
 export default function PlanUploadForm({
   eventId, currentPath, currentName,
-  planRawText, planAnalysis, planAnalysisStatus, planCompleteness,
+  planRawText, planAnalysis, planAnalysisStatus, planCompleteness, planFormatted,
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [uploading, setUploading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
+  const [formatting, setFormatting] = useState(false)
   const [analysisError, setAnalysisError] = useState('')
+  const [formatError, setFormatError] = useState('')
   const [showRawText, setShowRawText] = useState(false)
   const [completenessShown, setCompletenessShown] = useState(true)
+  const [showFormatted, setShowFormatted] = useState(false)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -81,6 +85,28 @@ export default function PlanUploadForm({
     setAnalyzing(false)
   }
 
+  async function handleFormat() {
+    setFormatting(true)
+    setFormatError('')
+    try {
+      const res = await fetch('/api/plans/format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setShowFormatted(true)
+        router.refresh()
+      } else {
+        setFormatError(data.error || '格式調整失敗')
+      }
+    } catch {
+      setFormatError('網絡錯誤，請重試')
+    }
+    setFormatting(false)
+  }
+
   // Parse completeness JSON
   let completeness: CompletenessData | null = null
   if (planCompleteness) {
@@ -99,6 +125,7 @@ export default function PlanUploadForm({
   const hasRawText = planAnalysisStatus === 'text_extracted'
   const canAnalyze = hasFile && planAnalysisStatus !== 'analyzed' && !analyzing
   const isIncomplete = completeness && !completeness.is_complete
+  const hasFormatted = !!planFormatted
 
   return (
     <div className="flex-1">
@@ -136,12 +163,34 @@ export default function PlanUploadForm({
             )}
           </button>
         )}
+
+        {/* AI Format Button — visible after upload */}
+        {hasFile && !formatting && (
+          <button
+            onClick={handleFormat}
+            disabled={formatting}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 disabled:opacity-50"
+          >
+            {formatting ? (
+              <><Loader2 className="w-3 h-3 animate-spin" /> 格式調整中...</>
+            ) : (
+              <><FileOutput className="w-3 h-3" /> 格式調整</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Analysis Error */}
       {analysisError && (
         <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
           {analysisError}
+        </div>
+      )}
+
+      {/* Format Error */}
+      {formatError && (
+        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+          {formatError}
         </div>
       )}
 
@@ -159,7 +208,6 @@ export default function PlanUploadForm({
             <button onClick={() => setCompletenessShown(false)} className="text-amber-500 hover:text-amber-700 text-xs">收起</button>
           </div>
           <div className="p-3 space-y-2">
-            {/* Checklist */}
             <div className="grid grid-cols-2 gap-1.5">
               {Object.entries(completeness.items || {}).map(([key, val]) => (
                 <div key={key} className={`flex items-center gap-1.5 text-xs ${val ? 'text-green-700' : 'text-red-700'}`}>
@@ -173,7 +221,6 @@ export default function PlanUploadForm({
               ))}
             </div>
 
-            {/* Missing items */}
             {completeness.missing && completeness.missing.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
                 <p className="text-xs font-medium text-red-700 mb-1">⚠️ 以下重要資料缺少或唔夠完整：</p>
@@ -199,7 +246,7 @@ export default function PlanUploadForm({
         </div>
       )}
 
-      {/* Completeness Pass — show when complete */}
+      {/* Completeness Pass */}
       {isAnalyzed && completeness && completeness.is_complete && completenessShown && (
         <div className="mt-3 bg-green-50 border border-green-200 rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-green-100 border-b border-green-200 flex items-center justify-between">
@@ -236,7 +283,38 @@ export default function PlanUploadForm({
         </div>
       )}
 
-      {/* Raw Text (no AI analysis yet) */}
+      {/* Formatted Plan Preview */}
+      {hasFormatted && (
+        <div className="mt-3 bg-white rounded-lg border border-indigo-200 overflow-hidden">
+          <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <FileOutput className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-xs font-semibold text-indigo-800">格式調整後嘅計劃書</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={`/api/plans/download?eventId=${eventId}`}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors"
+              >
+                <Download className="w-3 h-3" /> 下載 DOC
+              </a>
+              <button
+                onClick={() => setShowFormatted(!showFormatted)}
+                className="text-indigo-500 hover:text-indigo-700 text-xs"
+              >
+                {showFormatted ? '收起' : '預覽'}
+              </button>
+            </div>
+          </div>
+          {showFormatted && (
+            <div className="p-3 text-xs text-gray-700 whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed">
+              {planFormatted}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Raw Text */}
       {hasRawText && !isAnalyzed && planRawText && (
         <div className="mt-2 bg-white rounded border border-gray-200 overflow-hidden">
           <button

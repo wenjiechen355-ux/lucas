@@ -9,3 +9,6 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS plan_analyzed_at TIMESTAMPTZ;
 
 -- Completeness check result (JSON: { "is_complete": bool, "missing": [...], "score": int })
 ALTER TABLE events ADD COLUMN IF NOT EXISTS plan_completeness TEXT;
+
+-- AI formatted plan content (markdown)
+ALTER TABLE events ADD COLUMN IF NOT EXISTS plan_formatted TEXT;
