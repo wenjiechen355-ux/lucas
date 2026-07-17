@@ -76,6 +76,7 @@ export default function PlanUploadForm({
       const data = await res.json()
       if (res.ok) {
         router.refresh()
+        return
       } else {
         setAnalysisError(data.error || '分析失敗')
       }
@@ -98,6 +99,7 @@ export default function PlanUploadForm({
       if (res.ok) {
         setShowFormatted(true)
         router.refresh()
+        return
       } else {
         setFormatError(data.error || '格式調整失敗')
       }
@@ -149,30 +151,46 @@ export default function PlanUploadForm({
           <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xlsx,.ppt,.pptx,.txt,.jpg,.png" onChange={handleFileChange} disabled={uploading} />
         </label>
 
-        {/* AI Analyze Button */}
-        {canAnalyze && (
+        {/* AI Analyze Button — always visible when file uploaded */}
+        {hasFile && (
           <button
             onClick={handleAnalyze}
-            disabled={analyzing}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 disabled:opacity-50"
+            disabled={analyzing || planAnalysisStatus === 'analyzed'}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+              analyzing
+                ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-wait'
+                : planAnalysisStatus === 'analyzed'
+                  ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+            }`}
           >
             {analyzing ? (
               <><Loader2 className="w-3 h-3 animate-spin" /> 分析中...</>
+            ) : planAnalysisStatus === 'analyzed' ? (
+              <><CheckCircle className="w-3 h-3" /> 已分析</>
             ) : (
               <><Sparkles className="w-3 h-3" /> AI 分析計劃書</>
             )}
           </button>
         )}
 
-        {/* AI Format Button — visible after upload */}
-        {hasFile && !formatting && (
+        {/* AI Format Button — visible when file uploaded */}
+        {hasFile && (
           <button
             onClick={handleFormat}
-            disabled={formatting}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 disabled:opacity-50"
+            disabled={formatting || !!planFormatted}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+              formatting
+                ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-wait'
+                : planFormatted
+                  ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+            }`}
           >
             {formatting ? (
               <><Loader2 className="w-3 h-3 animate-spin" /> 格式調整中...</>
+            ) : planFormatted ? (
+              <><CheckCircle className="w-3 h-3" /> 已調整</>
             ) : (
               <><FileOutput className="w-3 h-3" /> 格式調整</>
             )}
