@@ -661,6 +661,7 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                       }
                       return map
                     })()}
+                    readOnly
                   />
                 </div>
               </div>
@@ -775,6 +776,7 @@ function PollCardV2({ poll, profile, isExec, allProfiles, onVote, onClose, onDel
                   <MonthCalendar
                     selectedDates={(myFieldSel?.calendar_dates || []) as string[]}
                     onToggleDate={(date: string) => toggleCalendarDate(fi, date)}
+                    readOnly
                   />
                 </div>
               )}

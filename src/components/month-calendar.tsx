@@ -11,6 +11,7 @@ interface MonthCalendarProps {
   minDate?: string
   maxDate?: string
   memberAvatars?: Record<string, string[]>
+  readOnly?: boolean  // ← true = display only, no clicking/voting
 }
 
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
@@ -40,7 +41,7 @@ function getDateRange(start: string, end: string): string[] {
   return dates
 }
 
-export default function MonthCalendar({ selectedDates, onToggleDate, month: m, year: y, minDate, maxDate, memberAvatars }: MonthCalendarProps) {
+export default function MonthCalendar({ selectedDates, onToggleDate, month: m, year: y, minDate, maxDate, memberAvatars, readOnly }: MonthCalendarProps) {
   const today = new Date()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
   const [viewMonth, setViewMonth] = useState(m ?? today.getMonth())
@@ -68,6 +69,7 @@ export default function MonthCalendar({ selectedDates, onToggleDate, month: m, y
   // ── Native window-level events (avoids all React delegation + capture quirks) ──
   useEffect(() => {
     function onDown(e: PointerEvent) {
+      if (readOnly) return  // ← display only, no interaction
       const target = (e.target as HTMLElement).closest('[data-date]') as HTMLElement | null
       if (!target) return
       const ds = target.getAttribute('data-date')
